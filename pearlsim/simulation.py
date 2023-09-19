@@ -57,13 +57,11 @@ class Simulation():
             file_path = line[2].replace("\n", "")
             try:
                 triso_data = pd.read_csv("../"+file_path, sep=" ", names=["x", "y", "z", "r", "id"])
-                try:
+                if not os.path.exists("trisos"):
                     os.mkdir("trisos")
-                except:
-                    pass
-                for i in range(1, 1 + num_copies):
-                    triso_data["id"] = f"p{i}"
-                    triso_data.to_csv(f"trisos/triso{i}", sep=" ", header=False, index=False)
+                    for i in range(1, 1 + num_copies):
+                        triso_data["id"] = f"p{i}"
+                        triso_data.to_csv(f"trisos/triso{i}", sep=" ", header=False, index=False)
             except:
                 print(f"Failed to load {line[1]}. Does the file exist?")
 

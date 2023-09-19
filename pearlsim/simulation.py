@@ -12,7 +12,7 @@ import os
 class Simulation():
     def __init__(self):
         self.core = Core()
-        self.cpu_cores = 1
+        self.cpu_cores = 20
         self.pebble_model = None
         self.debug = 0
         self.generate_training_data = True

@@ -99,6 +99,7 @@ class Material():
             input_s += " burn 1 \n"
         for key in self.concentrations.keys():
             conc_str = f"  {key}    {self.concentrations[key]}\n".replace("<lib>", self.cross_section_str)
+            input_s += conc_str
         input_s += "\n"
 
         if "fuel" in self.name:
@@ -111,7 +112,8 @@ class Material():
                            f"{other_mat.rgb[2]+rgb_modifier*10} " \
                            f"tmp {self.temperature} moder  grph 6000\n"
                 for key in other_mat.concentrations.keys():
-                    input_s += f"  {key}{other_mat.cross_section_str}    {other_mat.concentrations[key]}\n"
+                    input_s += f"  {key}    {other_mat.concentrations[key]}\n".replace("<lib>", self.cross_section_str)
+                    input_s += conc_str
                 input_s += "\n"
 
         # Write geometry for solid graphite pebble

@@ -164,7 +164,7 @@ set ures 1
 set inventory all
 set printm 1 0.0
 
-ene standard_grid 4 defaultmg
+ene standard_grid 4 cas12_ext
 det core_map n
   de standard_grid
   dn 1

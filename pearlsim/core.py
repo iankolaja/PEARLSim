@@ -279,7 +279,7 @@ class Core():
             detector_id += 1
             data = self.pebble_locations.iloc[i]
             detector_text += f"surf peb{detector_id}_s sph {data['x']} {data['y']} {data['z']} {self.pebble_radius}\n"
-            detector_text += f"det peb_{data['r']}_{data['z']}_ ds peb{detector_id}_s -1 de standard_grid\n"
+            detector_text += f"det peb_{round(data['r'],4)}_{round(data['z'],4)}_ ds peb{detector_id}_s -1 de standard_grid\n"
         return detector_text
 
     def get_volumes(self, fuel_kernel_per_pebble_volume = 0.36263376):

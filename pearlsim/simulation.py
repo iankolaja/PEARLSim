@@ -16,6 +16,7 @@ class Simulation():
         self.pebble_model = None
         self.debug = 0
         self.generate_training_data = True
+        self.serpent_settings = {"pop": "10000 50 25"}
     def read_input_file(self, input_file):
         with open(input_file, 'r') as f:
             directory_name = input_file.split("/")[-1].split(".")[0]
@@ -27,8 +28,8 @@ class Simulation():
             for line in f:
                 self.read_input_line(line)
 
-    def read_input_line(self, line):
-        line = line.split(" ")
+    def read_input_line(self, raw_line):
+        line = raw_line.split(" ")
         keyword = line[0]
 
         if keyword == "restart":
@@ -155,9 +156,17 @@ class Simulation():
             for step in range(num_steps):
                 self.core.insert(insertion_ratios, threshold, self.pebble_model, debug=self.debug)
                 if run_serpent:
-                    input_name = self.core.generate_input(self.debug)
+                    input_name = self.core.generate_input(self.serpent_settings,
+                                                          self.generate_training_data,
+                                                          self.debug)
                     os.system(f"sss2_2_0 {input_name} -omp {self.cpu_cores}")
+                    self.core.update_from_bumat(self.debug)
                     self.core.iteration += 1
 
-
-
+        if keyword == "set":
+            setting = line[1]
+            value = raw_line.split(setting)[1].replace("\n","")
+            if value == "clear":
+                self.serpent_settings.pop(setting)
+            else:
+                self.serpent_settings[setting] = value

@@ -161,21 +161,18 @@ set pdatadir "/global/home/groups/co_nuclear/serpent_photon_data/photon_data"
 
 set ures 1
 
-set pop 20000 250 25
-
-% Performance/memory
-set opti 1
-set gcu -1
-set memfrac 0.99
-set repro 0
-set shbuf 0 0
-set outp 100000
-
-set nbuf 1000
-set depout 2 2
-
-
+set inventory all
+set printm 1 0.0
 
 ene standard_grid 4 defaultmg
+det core_map n
+  de standard_grid
+  dn 1
+  0 120 4
+  0 360 1
+  0 492 10
 
-%%% Pebble Definitions Here %%%
+% Performance/memory
+
+
+

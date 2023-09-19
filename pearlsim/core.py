@@ -44,7 +44,6 @@ class Core():
         self.max_passes = 8
         self.iteration = 1
         self.pebble_radius = 2.0
-        self.power = 280e6
         self.burnup_time = 6.525
         self.num_top_zone_pebbles = 0
         self.num_pebble_detectors = 1000
@@ -280,37 +279,80 @@ class Core():
             detector_id += 1
             data = self.pebble_locations.iloc[i]
             detector_text += f"surf peb{detector_id}_s sph {data['x']} {data['y']} {data['z']} {self.pebble_radius}\n"
-            detector_text += f"det peb{detector_id} ds peb{detector_id}_s -1 de standard_grid\n"
+            detector_text += f"det peb_{data['r']}_{data['z']}_ ds peb{detector_id}_s -1 de standard_grid\n"
         return detector_text
 
-    def generate_input(self, debug):
+    def get_volumes(self, fuel_kernel_per_pebble_volume = 0.36263376):
+        volumes = {}
+        for radial_channel in self.zones:
+            for zone in radial_channel:
+                for mat_name in zone.inventory.keys():
+                    if "fuel" in mat_name:
+                        volumes[mat_name] = zone.inventory[mat_name]*fuel_kernel_per_pebble_volume
+        return volumes
+
+
+    def generate_input(self, serpent_settings, do_training_data, debug):
         input_str = self.core_geometry
-        input_str += "\n\n%%%%%%%% fuel materials \n\n"
+        input_str += f"dep daystep {self.burnup_time}\n"
+        for setting in serpent_settings.keys():
+            input_str += f"set {setting} {serpent_settings[setting]}\n"
+
+        input_str += "\n\n%%%%%%%% Pebble Universe Definition \n\n"
+        peb_file_name = f"pebble_positions_{self.iteration}.csv"
+        self.generate_pebble_locations(peb_file_name)
+        input_str += f"pbed u_pb u_flibe \"{peb_file_name}\" \n"
+
+        input_str += "\n\n%%%%%%%% Material and Pebble Definitions \n\n"
         triso_counter = 1
         for material in self.materials.values():
             if "discharge" not in material.name:
                 input_str += material.write_input(triso_counter, self.static_fuel_materials ,debug)
                 triso_counter += 1
-        input_str += "\n\n%%%%%%%% pebble detectors \n\n"
-        input_str += self.generate_pebble_detectors(self.num_pebble_detectors)
-        peb_file_name = f"pebble_positions_{self.iteration}.csv"
-        self.generate_pebble_locations(peb_file_name)
-        input_str += f"pbed u_pb u_flibe \"{peb_file_name}\" \n"
-        input_str += f"dep daystep {self.burnup_time}\n"
-        input_str += f"set power {self.power}\n"
+
+        input_str += "\n\n%%%%%%%% Material Definitions \n\n"
+        input_str += "set mvol\n"
+        volumes = self.get_volumes()
+        for mat_name in volumes.keys():
+            input_str += f"  {mat_name} 1 {volumes[mat_name]}\n"
+
+        if do_training_data:
+            input_str += "\n\n%%%%%%%% Pebble Current Detectors for ML model \n\n"
+            input_str += self.generate_pebble_detectors(self.num_pebble_detectors)
+
         file_name = f"{self.simulation_name}_{self.iteration}.serpent"
         with open(file_name, 'w') as f:
             f.write(input_str)
         return file_name
 
-    #def remove_pebbles(self, removal_fractions, debug=0):
-    #    num_radial_channels = len(self.zones)
-    #    removed_pebbles = 0
-    #    for r_zone in range(num_radial_channels):
-    #        z_zone = len(self.axial_zone_bounds[r_zone])
-    #        removed_pebbles += self.zones[r_zone][z_zone].remove_fractions(removal_fractions)
-    #        if self.always_remove_graphite:
-    #            removed_pebbles += self.zones[r_zone][z_zone].remove_graphite_pebbles()
-    #    if debug > 0:
-    #        print(f"{removed_pebbles} pebbles removed from passing the burnup threshold.")
-    #    return removed_pebbles
+    def update_from_bumat(self, debug):
+        bumat_name = f"{self.simulation_name}_{self.iteration}.serpent.bumat1"
+        if debug > 0:
+            print(f"Reading {bumat_name}")
+        with open(bumat_name, 'r') as f:
+            reading = False
+            first_mat = True
+            for line in f:
+                line = line.split()
+                if len(line) == 0:
+                    continue
+                if line[0] == "mat":
+                    if not first_mat:
+                        if debug > 0:
+                            print(f"Updating {current_mat_name}")
+                        self.materials[current_mat_name] = current_conc
+                        current_mat_name = line[1].split("pp")[0]
+                    current_conc = {}
+                    reading = True
+                    first_mat = False
+                elif reading:
+                    id = line[0].split(".")
+                    if len(id) > 1:
+                        nuclide = id[0] + "<lib>"
+                    else:
+                        nuclide = id[0]
+                    amount = float(line[1].replace("\n",""))
+                    current_conc[nuclide] = amount
+        if debug > 0:
+            print(f"Updating {current_mat_name}")
+        self.materials[current_mat_name] = current_conc

@@ -1,6 +1,8 @@
 import numpy as np
 from copy import deepcopy
 
+TRANSPORT_NUCLIDES = []
+
 def get_cross_section_string(temperature):
     xs_str = "."
     if 300 <= temperature < 600:
@@ -20,7 +22,7 @@ def get_cross_section_string(temperature):
 
 
 class Material():
-    def __init__(self, name, source, temperature = 900, pass_num = None, density=None,
+    def __init__(self, name, source, temperature = 959, pass_num = None, density=None,
                  rgb = (np.random.randint(50,150), np.random.randint(50,150), np.random.randint(50,150))):
         self.concentrations = {}
         if type(source) == str:
@@ -96,7 +98,7 @@ class Material():
         else:
             input_s += " burn 1 \n"
         for key in self.concentrations.keys():
-            input_s += f"  {key}{self.cross_section_str}    {self.concentrations[key]}\n"
+            conc_str = f"  {key}    {self.concentrations[key]}\n".replace("<lib>", self.cross_section_str)
         input_s += "\n"
 
         if "fuel" in self.name:

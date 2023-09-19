@@ -131,7 +131,7 @@ class Material():
             input_s += f"{self.name}_matrix\n\n"
 
             input_s += f"cell inf_{self.name} infU_{self.name} {self.name}_matrix -infinite\n"
-            input_s += f"pbed trisobed{triso_counter} infU_{self.name} \"scratch/triso{triso_counter}\"\n"
+            input_s += f"pbed trisobed{triso_counter} infU_{self.name} \"trisos/triso{triso_counter}\"\n"
             input_s += f"cell {self.name}_c1 u{self.name} pebgraph -pebble_core_outer\n"
             input_s += f"cell {self.name}_c2 u{self.name} fill trisobed{triso_counter} pebble_core_outer -matrix_outer\n"
             input_s += f"cell {self.name}_c3 u{self.name} pebshell  matrix_outer -pebble_outer\n"

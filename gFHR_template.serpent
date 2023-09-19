@@ -1,0 +1,181 @@
+%%%%%%%%%%% Materials %%%%%%%%%%%
+
+mat CBSS316H -8.0 tmp 900
+ 6000.09c   -0.000700
+25055.09c   -0.000700
+14028.09c   -0.003458
+14029.09c   -0.000176
+14030.09c   -0.000116
+15031.09c   -0.000450
+16032.09c   -0.000285
+16033.09c   -0.000002
+16034.09c   -0.000013
+24050.09c   -0.007387
+24052.09c   -0.142441
+24053.09c   -0.016152
+24054.09c   -0.004021
+42092.09c   -0.003663
+42094.09c   -0.002298
+42095.09c   -0.003968
+42096.09c   -0.004168
+42097.09c   -0.002395
+42098.09c   -0.006073
+42100.09c   -0.002435
+28058.09c   -0.081692
+28060.09c   -0.031468
+28061.09c   -0.001368
+28062.09c   -0.004362
+28064.09c   -0.001111
+26054.09c   -0.039749
+26056.09c   -0.623418
+26057.09c   -0.014405
+26058.09c   -0.001903
+
+mat RVSS316H -8.0 tmp 900
+ 6000.09c   -0.000700
+25055.09c   -0.000700
+14028.09c   -0.003458
+14029.09c   -0.000176
+14030.09c   -0.000116
+15031.09c   -0.000450
+16032.09c   -0.000285
+16033.09c   -0.000002
+16034.09c   -0.000013
+24050.09c   -0.007387
+24052.09c   -0.142441
+24053.09c   -0.016152
+24054.09c   -0.004021
+42092.09c   -0.003663
+42094.09c   -0.002298
+42095.09c   -0.003968
+42096.09c   -0.004168
+42097.09c   -0.002395
+42098.09c   -0.006073
+42100.09c   -0.002435
+28058.09c   -0.081692
+28060.09c   -0.031468
+28061.09c   -0.001368
+28062.09c   -0.004362
+28064.09c   -0.001111
+26054.09c   -0.039749
+26056.09c   -0.623418
+26057.09c   -0.014405
+26058.09c   -0.001903
+
+%
+% Carbon pebble core for inner fuel
+mat pebgraph  -1.74   rgb  255 127  80     tmp 900  moder  grph 6000
+ 6000.09c    1.0
+%
+% -----------------------------------------------------------------------------
+% Carbon pebble shell
+mat pebshell -1.74   rgb  255 215   0   tmp 900    moder  grph 6000
+ 6000.09c    1.0
+%
+% -----------------------------------------------------------------------------
+% FLiBe
+%NS@KP please check density, temperature changed
+mat FLiBe -1.97 rgb 127 255 212 tmp 900
+  3007.09c    1.999950
+  3006.09c    0.000050
+  4009.09c    1
+  9019.09c    4
+mat FLiBeInC -1.97 rgb 127 255 212 tmp 900
+  3007.09c    1.999950
+  3006.09c    0.000050
+  4009.09c    1
+  9019.09c    4
+%
+% Reflector contains 10 percent flibe %
+mat reflector  -1.74 tmp 900 moder  grph 6000  rgb 150 150 150
+ 6000.09c   -1.0
+mat reflectorT -1.74 tmp 900 moder  grph 6000  rgb 150 150 150
+ 6000.09c   -1.0
+mat reflectorB -1.74 tmp 900 moder  grph 6000  rgb 150 150 150
+ 6000.09c   -1.0
+mat reflectorS -1.74 tmp 900 moder  grph 6000 rgb 150 150 150
+ 6000.09c   -1.0
+%
+therm grph 900 gre6.18t gre6.20t
+
+
+
+
+%%%%%%%%%%% Static Geometry %%%%%%%%%%%
+
+set bc 1
+%%---plotting geometry
+plot 1 807 1000
+plot 3 2000 2000 226.0
+
+
+%%---surf for core
+surf infinite inf
+
+%%---surf for triso inside fuel pebbles (spheres)
+surf pebble_core_outer sph 0 0 0 1.38 % internal graphite
+surf matrix_outer sph 0 0 0 1.80 % graphite matrix maximum radius
+surf pebble_outer sph 0 0 0 2.0 % graphite matrix maximum radius
+
+surf core_surf          cylz    0.0 0.0 120.00      60.00    369.47
+surf refl_side_surf     cylz    0.0 0.0 180.00      0.0      429.47
+surf CB_surf            cylz    0.0 0.0 182.00      0.0      429.47
+surf FLiBe_DC_surf      cylz    0.0 0.0 187.00      0.0      429.47
+surf RV_surf            cylz    0.0 0.0 191.00      0.0      429.47
+surf refl_bottom_surf   cylz    0.0 0.0 120.00      0.0      60.0
+surf refl_top_surf      cylz    0.0 0.0 120.00      369.47   429.47
+
+
+cell c_pb               0   fill u_pb     -core_surf
+cell c_refl_side        0   reflectorS    -refl_side_surf core_surf refl_bottom_surf refl_top_surf
+cell c_refl_bottom      0   reflectorB    -refl_bottom_surf
+cell c_refl_top         0   reflectorT    -refl_top_surf
+
+cell c_CB               0   CBSS316H      -CB_surf          refl_side_surf
+cell c_DC               0   FLiBe         -FLiBe_DC_surf    CB_surf
+cell c_RV               0   RVSS316H      -RV_surf          FLiBe_DC_surf
+
+cell out_cell 0 outside     RV_surf
+
+cell c_flibe u_flibe FLiBeInC -infinite
+
+
+
+
+
+
+
+
+
+
+%%%%%%%%%%% Simulation parameters %%%%%%%%%%%
+
+% Nuclear data import
+set acelib "/global/home/groups/co_nuclear/serpent/xsdata/endfb7/sss_endfb7u.xsdata" "/global/home/groups/co_nuclear/serpent_photon_data/mcplib.xsdata"
+set declib "/global/home/groups/co_nuclear/serpent/xsdata/endfb7/sss_endfb7.dec"
+set pdatadir "/global/home/groups/co_nuclear/serpent_photon_data/photon_data"
+
+
+
+
+
+set ures 1
+
+set pop 20000 250 25
+
+% Performance/memory
+set opti 1
+set gcu -1
+set memfrac 0.99
+set repro 0
+set shbuf 0 0
+set outp 100000
+
+set nbuf 1000
+set depout 2 2
+
+
+
+ene standard_grid 4 defaultmg
+
+%%% Pebble Definitions Here %%%

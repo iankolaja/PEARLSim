@@ -1,0 +1,23 @@
+radial_channel
+z_divisions 91 122 153 184 215 246 277 308 339 
+point 0 30
+point 429 30
+end
+
+radial_channel
+z_divisions 91 122 153 184 215 246 277 308 339 
+point 0 60
+point 429 60
+end
+
+radial_channel
+z_divisions 91 122 153 184 215 246 277 308 339 
+point 0 90
+point 429 90
+end
+
+radial_channel
+z_divisions 91 122 153 184 215 246 277 308 339 
+point 0 120
+point 429 120
+end

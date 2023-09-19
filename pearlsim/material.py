@@ -112,7 +112,7 @@ class Material():
                            f"{other_mat.rgb[2]+rgb_modifier*10} " \
                            f"tmp {self.temperature} moder  grph 6000\n"
                 for key in other_mat.concentrations.keys():
-                    input_s += f"  {key}    {other_mat.concentrations[key]}\n".replace("<lib>", self.cross_section_str)
+                    conc_str = f"  {key}    {other_mat.concentrations[key]}\n".replace("<lib>", self.cross_section_str)
                     input_s += conc_str
                 input_s += "\n"
 

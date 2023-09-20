@@ -5,6 +5,7 @@ import random
 from copy import deepcopy
 import pandas as pd
 import os
+import json
 
 def get_zone(r, z, radial_bound_points, axial_zone_bounds):
     num_radial_channels = len(radial_bound_points)
@@ -46,7 +47,7 @@ class Core():
         self.pebble_radius = 2.0
         self.burnup_time = 6.525
         self.num_top_zone_pebbles = 0
-        self.num_pebble_detectors = 1000
+        self.num_pebble_detectors = 50000
         self.materials = {}
         self.fresh_pebbles = {}
         self.pebble_locations = pd.DataFrame([], columns=["x","y","z","r","zone_z","zone_r"])
@@ -324,6 +325,18 @@ class Core():
         with open(file_name, 'w') as f:
             f.write(input_str)
         return file_name
+
+    def save_zone_maps(self, file_name):
+        zone_map = {}
+        for radial_channel in self.zones:
+            for zone in radial_channel:
+                zone_id = f"zoneR{zone.radial_num}Z{zone.axial_num}"
+                zone_map[zone_id] = zone.inventory
+        zone_str = json.dumps(zone_map)
+        with open(file_name, 'r') as f:
+            f.write(zone_str)
+        return zone_str
+
 
     def update_from_bumat(self, debug):
         bumat_name = f"{self.simulation_name}_{self.iteration}.serpent.bumat1"

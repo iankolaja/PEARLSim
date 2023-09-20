@@ -354,7 +354,7 @@ class Core():
                         if debug > 0:
                             print(f"Updating {current_mat_name}")
                         self.materials[current_mat_name] = current_conc
-                        current_mat_name = line[1].split("pp")[0]
+                    current_mat_name = line[1].split("pp")[0]
                     current_conc = {}
                     reading = True
                     first_mat = False

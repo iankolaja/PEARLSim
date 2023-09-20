@@ -30,6 +30,7 @@ class Simulation():
 
     def read_input_line(self, raw_line):
         line = raw_line.split(" ")
+        line = line.split("#")[0] # Ignore comments
         keyword = line[0]
 
         if keyword == "restart":
@@ -103,10 +104,16 @@ class Simulation():
             if model_type == "RFR":
                 self.pebble_model = Pebble_Model(model_type, "../"+file_path)
 
-        if keyword == "set_generate_training_data":
-            choice = bool(line[1].replace("\n", ""))
-            print(f"Training data generation set to {choice}.")
-            self.generate_training_data = choice
+        if keyword == "generate_training_data":
+            choice = line[1].replace("\n", "")
+            if choice in ["yes", "Yes", "True", "true", "1", "on", "On"]:
+                print(f"Training data generation turned on.")
+                self.generate_training_data = True
+            elif choice in ["no", "No", "false", "False", "0", "off", "Off"]:
+                print(f"Training data generation turned off.")
+                self.generate_training_data = False
+            else:
+                print("Unknown input for training data generation flag.")
 
 
         if keyword == "core_geometry":
@@ -145,7 +152,7 @@ class Simulation():
         if keyword == "insertion":
             num_steps = int(line[1])
             threshold = float(line[2])
-            run_serpent = bool(int(line[3]))
+            serpent_flag = int(line[3]) # 0 for no serpent, 1 to run serpent, 2 to use serpent results that already exist
             fuel_ratios = line[4:]
             num_definitions = int(len(fuel_ratios)/2)
             insertion_ratios = []
@@ -153,11 +160,15 @@ class Simulation():
                 insertion_ratios += [(fuel_ratios[i * 2], float(fuel_ratios[i * 2 + 1]))]
             for step in range(num_steps):
                 self.core.insert(insertion_ratios, threshold, self.pebble_model, debug=self.debug)
-                if run_serpent:
+                if serpent_flag == 1:
                     input_name = self.core.generate_input(self.serpent_settings,
                                                           self.generate_training_data,
                                                           self.debug)
                     os.system(f"sss2_2_0 {input_name} -omp {self.cpu_cores}")
+                    self.core.save_zone_maps(f"zone_map{self.core.iteration}.json")
+                    self.core.update_from_bumat(self.debug)
+                    self.core.iteration += 1
+                elif serpent_flag == 2:
                     self.core.update_from_bumat(self.debug)
                     self.core.iteration += 1
 

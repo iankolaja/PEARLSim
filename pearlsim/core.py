@@ -135,15 +135,12 @@ class Core():
             print("Clearing discharge inventory...")
 
         self.reinsert_inventory = deepcopy(self.discharge_inventory)
-        print(self.reinsert_inventory.inventory)
         rename_map = self.reinsert_inventory.increment_pass()
-        print(self.reinsert_inventory.inventory)
         self.rename_materials(rename_map)
         if self.reinsert_inventory.num_pebbles > 0:
             reinsert_fracs = dict(zip(self.reinsert_inventory.inventory.keys(),
                                       map(lambda x: x / self.num_top_zone_pebbles,
                                           self.reinsert_inventory.inventory.values())))
-            print(reinsert_fracs)
         else:
             reinsert_fracs = {}
 

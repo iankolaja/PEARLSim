@@ -368,4 +368,4 @@ class Core():
                     current_conc[nuclide] = amount
         if debug > 0:
             print(f"Updating {current_mat_name}")
-        self.materials[current_mat_name] = current_conc
+        self.materials[current_mat_name].concentrations = current_conc

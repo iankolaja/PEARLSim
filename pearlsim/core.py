@@ -234,21 +234,15 @@ class Core():
 
                 # If this pebble group is nonzero, create a new material to volume average
                 if total_group_pebbles > 0:
-                    print(grouped_materials)
                     averaged_grouped_material_key = f"avgdischarge_{fuel_type}_P{p}"
                     averaged_grouped_material = Material(averaged_grouped_material_key, {},
                                               temperature=0, pass_num=pass_num, density="sum fix")
                     average_temperature = 0
                     for key in grouped_materials.keys():
                         pebbles_in_material = grouped_materials[key]
-                        print(pebbles_in_material)
-                        print(total_group_pebbles)
                         volume_fraction = pebbles_in_material/total_group_pebbles
-                        print(volume_fraction)
                         averaged_grouped_material = averaged_grouped_material + (self.materials[key]*volume_fraction)
                         average_temperature += self.materials[key].temperature * volume_fraction
-                        print(self.materials[key].concentrations)
-                    print(averaged_grouped_material.concentrations)
                     averaged_materials[averaged_grouped_material_key] = total_group_pebbles
                     averaged_grouped_material.temperature = average_temperature
                     self.materials[averaged_grouped_material_key] = averaged_grouped_material

@@ -16,7 +16,7 @@ class Simulation():
         self.num_nodes = 1
         self.pebble_model = None
         self.debug = 0
-        self.generate_training_data = True
+        self.num_training_data = 0
         self.serpent_settings = {"pop": "10000 50 25"}
     def read_input_file(self, input_file):
         with open(input_file, 'r') as f:
@@ -111,17 +111,10 @@ class Simulation():
             if model_type == "RFR":
                 self.pebble_model = Pebble_Model(model_type, "../"+file_path)
 
-        if keyword == "generate_training_data":
-            choice = line[1].replace("\n", "")
-            if choice in ["yes", "Yes", "True", "true", "1", "on", "On"]:
-                print(f"Training data generation turned on.")
-                self.generate_training_data = True
-            elif choice in ["no", "No", "false", "False", "0", "off", "Off"]:
-                print(f"Training data generation turned off.")
-                self.generate_training_data = False
-            else:
-                print("Unknown input for training data generation flag.")
-
+        if keyword == "num_training_data":
+            points = int(line[1].replace("\n", ""))
+            print(f"Generating {points} training data points.")
+            self.num_training_data = points
 
         if keyword == "core_geometry":
             file_path = line[1].replace("\n", "").replace('\"','')
@@ -169,7 +162,7 @@ class Simulation():
                 self.core.insert(insertion_ratios, threshold, self.pebble_model, debug=self.debug)
                 if serpent_flag == 1:
                     input_name = self.core.generate_input(self.serpent_settings,
-                                                          self.generate_training_data,
+                                                          self.num_training_data,
                                                           self.debug)
                     if self.num_nodes > 1:
                         os.system(f"mpirun -np {self.num_nodes} --map-by ppr:1:node:pe={self.cpu_cores}"

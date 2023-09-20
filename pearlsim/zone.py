@@ -122,7 +122,7 @@ class Zone():
         for i in range(len(self.pebble_locations)):
             peb = self.pebble_locations.iloc[i]
             pebble_s += f"{peb['x']} {peb['y']} {peb['z']} {peb_radius} u{peb['material']}\n"
-        return pebble_s
+        return pebble_s, self.pebble_locations
 
 class Out_Of_Core_Bin():
     def __init__(self):

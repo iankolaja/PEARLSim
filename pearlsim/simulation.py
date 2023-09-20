@@ -29,8 +29,8 @@ class Simulation():
                 self.read_input_line(line)
 
     def read_input_line(self, raw_line):
-        line = raw_line.split(" ")
-        line = line.split("#")[0] # Ignore comments
+        line = raw_line.split("#")[0] # Ignore comments
+        line = line.split(" ")
         keyword = line[0]
 
         if keyword == "restart":

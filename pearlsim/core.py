@@ -50,7 +50,7 @@ class Core():
         self.num_pebble_detectors = 5000
         self.materials = {}
         self.fresh_pebbles = {}
-        self.pebble_locations = pd.DataFrame([], columns=["x","y","z","r","zone_z","zone_r"])
+        self.pebble_locations = pd.DataFrame([], columns=["x","y","z","r","zone_r","zone_z"])
         self.core_geometry = ""
         self.discharge_inventory = Out_Of_Core_Bin()
         self.reinsert_inventory = Out_Of_Core_Bin()
@@ -111,7 +111,7 @@ class Core():
         for r in range(self.num_r):
             self.num_z += [len(self.axial_zone_bounds[r])+1]
             self.num_top_zone_pebbles += len(self.zones[r][-1].pebble_locations)
-        self.pebble_locations = pd.DataFrame(pebble_locations, columns=["x","y","z","r","zone_z","zone_r"])
+        self.pebble_locations = pd.DataFrame(pebble_locations, columns=["x","y","z","r","zone_r","zone_z"])
     def rename_materials(self, rename_map):
         for key in rename_map.keys():
             new_material = rename_map[key]
@@ -276,12 +276,22 @@ class Core():
         pebble_ids = np.random.choice(len(self.pebble_locations), num_detectors, replace=False)
         detector_text = ""
         detector_id = 0
+
+        # Extra features to track per pebble
+        temperature_array = []
+        cs137_array = []
+        fuel_flag_array = []
+
         for i in pebble_ids:
             detector_id += 1
             data = self.pebble_locations.iloc[i]
             detector_text += f"surf peb{detector_id}_s sph {data['x']} {data['y']} {data['z']} {self.pebble_radius}\n"
             detector_text += f"det peb_{round(data['r'],4)}_{round(data['z'],4)}_ ds peb{detector_id}_s -1 de standard_grid\n"
-        return detector_text
+
+        auxiliary_features = pd.DataFrame({"temperature": temperature_array,
+                                           "cs137": cs137_array,
+                                           "is_fuel": fuel_flag_array})
+        return detector_text, auxiliary_features
 
     def get_volumes(self, fuel_kernel_per_pebble_volume = 0.36263376):
         volumes = {}
@@ -319,7 +329,8 @@ class Core():
 
         if do_training_data:
             input_str += "\n\n%%%%%%%% Pebble Current Detectors for ML model \n\n"
-            input_str += self.generate_pebble_detectors(self.num_pebble_detectors)
+            detector_str, auxiliary_features = self.generate_pebble_detectors(self.num_pebble_detectors)
+            input_str += detector_str
 
         file_name = f"{self.simulation_name}_{self.iteration}.serpent"
         with open(file_name, 'w') as f:

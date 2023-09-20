@@ -47,7 +47,7 @@ class Core():
         self.pebble_radius = 2.0
         self.burnup_time = 6.525
         self.num_top_zone_pebbles = 0
-        self.num_pebble_detectors = 50000
+        self.num_pebble_detectors = 5000
         self.materials = {}
         self.fresh_pebbles = {}
         self.pebble_locations = pd.DataFrame([], columns=["x","y","z","r","zone_z","zone_r"])

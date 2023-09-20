@@ -13,6 +13,7 @@ class Simulation():
     def __init__(self):
         self.core = Core()
         self.cpu_cores = 20
+        self.num_nodes = 1
         self.pebble_model = None
         self.debug = 0
         self.generate_training_data = True
@@ -49,6 +50,12 @@ class Simulation():
 
         if keyword == "burn_time":
             self.core.burn_time = float(line[1])
+
+        if keyword == "num_cores":
+            self.core.cpu_cores = int(line[1])
+
+        if keyword == "num_nodes":
+            self.core.cpu_cores = int(line[1])
 
         if keyword == "power":
             self.core.power = float(line[1])
@@ -164,7 +171,12 @@ class Simulation():
                     input_name = self.core.generate_input(self.serpent_settings,
                                                           self.generate_training_data,
                                                           self.debug)
-                    os.system(f"sss2_2_0 {input_name} -omp {self.cpu_cores}")
+                    if self.num_nodes > 1:
+                        os.system(f"mpirun -np {self.num_nodes} --map-by ppr:1:node:pe={self.cpu_cores}"
+                                  f" sss2_2_0 -omp {self.cpu_cores} {input_name}")
+                        os.system(f"sss2_2_0 {input_name} -omp {self.cpu_cores}")
+                    else:
+                        os.system(f"sss2_2_0 {input_name} -omp {self.cpu_cores}")
                     self.core.save_zone_maps(f"zone_map{self.core.iteration}.json")
                     self.core.update_from_bumat(self.debug)
                     self.core.iteration += 1

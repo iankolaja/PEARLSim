@@ -333,7 +333,7 @@ class Core():
                 zone_id = f"zoneR{zone.radial_num}Z{zone.axial_num}"
                 zone_map[zone_id] = zone.inventory
         zone_str = json.dumps(zone_map)
-        with open(file_name, 'r') as f:
+        with open(file_name, 'w') as f:
             f.write(zone_str)
         return zone_str
 

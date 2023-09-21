@@ -1,0 +1,97 @@
+%%%%%%%%%%% Materials %%%%%%%%%%%
+
+%
+% Carbon pebble core for inner fuel
+mat pebgraph  -1.74   rgb  255 127  80     tmp 900  moder  grph 6000
+ 6000.09c    1.0
+%
+% -----------------------------------------------------------------------------
+% Carbon pebble shell
+mat pebshell -1.74   rgb  255 215   0   tmp 900    moder  grph 6000
+ 6000.09c    1.0
+%
+% -----------------------------------------------------------------------------
+
+therm grph 900 gre6.18t gre6.20t
+
+
+
+
+%%%%%%%%%%% Static Geometry %%%%%%%%%%%
+
+set bc 1
+%%---plotting geometry
+plot 1 1000 1000
+
+
+%%---surf for core
+surf infinite inf
+
+%%---surf for triso inside fuel pebbles (spheres)
+surf pebble_core_outer sph 0 0 0 1.38 % internal graphite
+surf matrix_outer sph 0 0 0 1.80 % graphite matrix maximum radius
+surf pebble_outer sph 0 0 0 2.0 % graphite matrix maximum radius
+
+
+mat fuel -3.18 rgb 150 75 110 tmp <temperature> moder  grph 6000
+<concentrations>
+
+mat PyC -1.9 rgb 160 85 120 tmp <temperature> moder  grph 6000
+  6000.09c    1.0
+
+mat buffer -1.05 rgb 170 95 130 tmp <temperature> moder  grph 6000
+  6000.09c    1.0
+
+mat matrix -1.74 rgb 180 105 140 tmp <temperature> moder  grph 6000
+  6000.09c    1.0
+
+particle p1
+fuel	0.02125
+buffer    0.031250
+PyC    0.035250
+SiC    0.038750
+PyC    0.042750
+matrix
+
+cell inf_fuel infU_fuel fuel_matrix -infinite
+pbed trisobed 0 "trisos/triso1"
+cell fuelc1 0 pebgraph -pebble_core_outer
+cell fuelc2 0 fill trisobed pebble_core_outer -matrix_outer
+cell fuelc3 0 pebshell  matrix_outer -pebble_outer
+cell boundary 0 outside pebble_outer
+
+
+
+
+%%%%%%%%%%% Simulation parameters %%%%%%%%%%%
+
+set nps 1000000
+set ures 1
+set srcrate <rate>
+
+src pebble_current n
+ds -boundary
+<current>
+
+dep daystep <time>
+set seed  42
+set acelib  "/global/home/groups/co_nuclear/serpent/xsdata/endfb7/sss_endfb7u.xsdata" "/global/home/groups/co_nuclear/serpent_photon_data/mcplib.xsdata"
+set declib  "/global/home/groups/co_nuclear/serpent/xsdata/endfb7/sss_endfb7.dec"
+set pdatadir  "/global/home/groups/co_nuclear/serpent_photon_data/photon_data"
+set nfylib  "/global/home/groups/co_nuclear/serpent/xsdata/endfb7/sss_endfb7.nfy"
+set opti  4
+set gcu  -1
+set memfrac  0.99
+set repro  0
+set shbuf  0 0
+set outp  100000
+set nbuf  1000
+set depout  3 1
+set ures  1
+set inventory  all
+set printm  1 0.0
+
+
+
+
+

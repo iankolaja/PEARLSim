@@ -167,7 +167,6 @@ class Simulation():
                     if self.num_nodes > 1:
                         os.system(f"mpirun -np {self.num_nodes} --map-by ppr:1:node:pe={self.cpu_cores}"
                                   f" sss2_2_0 -omp {self.cpu_cores} {input_name}")
-                        os.system(f"sss2_2_0 {input_name} -omp {self.cpu_cores}")
                     else:
                         os.system(f"sss2_2_0 {input_name} -omp {self.cpu_cores}")
                     self.core.save_zone_maps(f"zone_map{self.core.iteration}.json")

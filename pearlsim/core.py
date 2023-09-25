@@ -318,7 +318,10 @@ class Core():
         input_str += "\n\n%%%%%%%% Pebble Universe Definition \n\n"
         peb_file_name = f"pebble_positions_{self.iteration}.csv"
         assigned_pebbles = self.generate_pebble_locations(peb_file_name)
-        input_str += f"pbed u_pb u_flibe \"{peb_file_name}\" \n"
+        if num_training_data > 0:
+            input_str += f"pbed u_pb u_flibe \"{peb_file_name}\"  pow\n"
+        else:
+            input_str += f"pbed u_pb u_flibe \"{peb_file_name}\" \n"
 
         input_str += "\n\n%%%%%%%% Material and Pebble Definitions \n\n"
         triso_counter = 1

@@ -311,7 +311,8 @@ class Core():
 
     def generate_input(self, serpent_settings, num_training_data, debug):
         input_str = self.core_geometry
-        input_str += f"dep daystep {self.burnup_time}\n"
+        if num_training_data == 0:
+            input_str += f"dep daystep {self.burnup_time}\n"
         for setting in serpent_settings.keys():
             input_str += f"set {setting} {serpent_settings[setting]}\n"
 

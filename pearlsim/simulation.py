@@ -172,8 +172,9 @@ class Simulation():
                         print(f"Running with {self.cpu_cores} cores.")
                         os.system(f"sss2_2_0 {input_name} -omp {self.cpu_cores}")
                     self.core.save_zone_maps(f"zone_map{self.core.iteration}.json")
-                    self.core.update_from_bumat(self.debug)
-                    self.core.iteration += 1
+                    if self.num_training_data == 0:
+                        self.core.update_from_bumat(self.debug)
+                        self.core.iteration += 1
                 elif serpent_flag == 2:
                     self.core.update_from_bumat(self.debug)
                     self.core.iteration += 1

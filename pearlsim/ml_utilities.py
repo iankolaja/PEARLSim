@@ -47,7 +47,7 @@ def read_det_file(file_name, energy_bins_lower=(0.0, 3e-08, 5.8e-08, 1.4e-07, 2.
 
 
 def extract_from_bumat(file_path):
-    concentrations = {}
+    concentrations = []
     with open(file_path, 'r') as f:
         reading = False
         first_mat = True
@@ -57,7 +57,7 @@ def extract_from_bumat(file_path):
                 continue
             if line[0] == "mat":
                 if not first_mat:
-                    concentrations[current_mat_name] = current_conc
+                    concentrations += [current_conc]
                 current_mat_name = line[1].split("pp")[0]
                 current_conc = {}
                 reading = True
@@ -70,6 +70,26 @@ def extract_from_bumat(file_path):
                     nuclide = id[0]
                 amount = float(line[1].replace("\n", ""))
                 current_conc[nuclide] = amount
-    concentrations[current_mat_name] = current_conc
+    concentrations += [current_conc]
     return concentrations
 
+def generate_pebble_burnup_model(template_path, surface_current, power, concentrations, temp, time,
+                                 energy_bins=[3e-08, 5.8e-08, 1.4e-07, 2.8e-07, 3.5e-07, 6.25e-07,
+                                              4e-06, 4.8052e-05, 0.00553, 0.821, 2.231, 10]):
+    lib_str = get_cross_section_string(temp)
+    with open(template_path, "r") as f:
+        input_s = f.read()
+    concentration_s = ""
+    for key in concentrations.keys():
+        concentration_s  += f"  {key}    {concentrations[key]}\n".replace("<lib>", lib_str)
+    input_s = input_s.replace("<concentrations>", concentration_s)
+    input_s = input_s.replace("<temperature>", str(temp))
+    input_s = input_s.replace("<time>", str(time))
+    input_s = input_s.replace("<power>", str(power))
+
+    weights = (surface_current/1e9).astype(int)
+    source_str = f"sb {len(weights)+1} 1\n  0 0 \n"
+    for i in range(len(surface_current)):
+        source_str += f"  {energy_bins[i]} {weights[i]}\n"
+    input_s = input_s.replace("<current>", source_str)
+    return input_s

@@ -2,17 +2,18 @@
 
 %
 % Carbon pebble core for inner fuel
-mat pebgraph  -1.74   rgb  255 127  80     tmp 900  moder  grph 6000
+mat pebgraph  -1.74   rgb  255 127  80     tmp <temperature>  moder  grph 6000
  6000.09c    1.0
 %
 % -----------------------------------------------------------------------------
 % Carbon pebble shell
-mat pebshell -1.74   rgb  255 215   0   tmp 900    moder  grph 6000
+mat pebshell -1.74   rgb  255 215   0   tmp <temperature>    moder  grph 6000
  6000.09c    1.0
 %
 % -----------------------------------------------------------------------------
 
-therm grph 900 gre6.18t gre6.20t
+therm grph <temperature> gre6.18t gre6.20t
+therm grph_fuel <temperature> gre6.18t gre6.20t
 
 
 
@@ -33,19 +34,25 @@ surf matrix_outer sph 0 0 0 1.80 % graphite matrix maximum radius
 surf pebble_outer sph 0 0 0 2.0 % graphite matrix maximum radius
 
 
-mat fuel -3.18 rgb 150 75 110 tmp <temperature> moder  grph 6000
+mat fuel sum fix 09c 959 rgb 73 99 98  tmp 959  rgb 150 75 110 burn 1 moder  grph_fuel 6012
 <concentrations>
 
-set mvol fuel 1 0.36263376
 
-mat PyC -1.9 rgb 160 85 120 tmp <temperature> moder  grph 6000
+mat SiC -3.18 rgb 76 159 137 tmp <temperature> moder  grph 6000
+  14028.09c    0.0440455
+  14029.09c    0.00224527
+  14030.09c    0.00148092
+  6000.09c    0.0478749
+
+mat PyC -1.9 rgb 86 169 147 tmp <temperature> moder  grph 6000
   6000.09c    1.0
 
-mat buffer -1.05 rgb 170 95 130 tmp <temperature> moder  grph 6000
+mat buffer -1.05 rgb 96 179 157 tmp <temperature> moder  grph 6000
   6000.09c    1.0
 
-mat matrix -1.74 rgb 180 105 140 tmp <temperature> moder  grph 6000
+mat matrix -1.74 rgb 106 189 167 tmp <temperature> moder  grph 6000
   6000.09c    1.0
+
 
 particle p1
 fuel	0.02125
@@ -56,23 +63,26 @@ PyC    0.042750
 matrix
 
 cell inf_fuel infU_fuel fuel_matrix -infinite
-pbed trisobed 0 "trisos/triso1"
+pbed trisobed u_graph "gFHR_triso.dat"
+cell inf u_graph  matrix -infinite
 cell fuelc1 0 pebgraph -pebble_core_outer
 cell fuelc2 0 fill trisobed pebble_core_outer -matrix_outer
 cell fuelc3 0 pebshell  matrix_outer -pebble_outer
-cell boundary 0 outside pebble_outer
+surf boundary_s cube 0 0 0 2
+cell space 0 void pebble_outer -boundary_s
+cell boundary 0 outside boundary_s
 
-
+set mvol fuel 1 0.36263376
 
 
 %%%%%%%%%%% Simulation parameters %%%%%%%%%%%
 
-set nps 1000000
+set nps 50000000
 set ures 1
 set power <power>
 
 src pebble_current n
-ds -boundary
+ss -pebble_outer
 <current>
 
 dep daystep <time>
@@ -92,8 +102,3 @@ set depout  3 1
 set ures  1
 set inventory  all
 set printm  1 0.0
-
-
-
-
-

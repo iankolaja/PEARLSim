@@ -36,6 +36,8 @@ surf pebble_outer sph 0 0 0 2.0 % graphite matrix maximum radius
 mat fuel -3.18 rgb 150 75 110 tmp <temperature> moder  grph 6000
 <concentrations>
 
+set mvol fuel 1 0.36263376
+
 mat PyC -1.9 rgb 160 85 120 tmp <temperature> moder  grph 6000
   6000.09c    1.0
 
@@ -67,7 +69,7 @@ cell boundary 0 outside pebble_outer
 
 set nps 1000000
 set ures 1
-set srcrate <rate>
+set power <power>
 
 src pebble_current n
 ds -boundary

@@ -14,6 +14,7 @@ class Simulation():
         self.core = Core()
         self.cpu_cores = 20
         self.num_nodes = 1
+        self.days = 0
         self.pebble_model = None
         self.debug = 0
         self.num_training_data = 0
@@ -174,7 +175,8 @@ class Simulation():
                     self.core.save_zone_maps(f"zone_map{self.core.iteration}.json")
                     if self.num_training_data == 0:
                         self.core.update_from_bumat(self.debug)
-                        self.core.iteration += 1
+                        self.days += self.core.burnup_time
+                    self.core.iteration += 1
                 elif serpent_flag == 2:
                     self.core.update_from_bumat(self.debug)
                     self.core.iteration += 1

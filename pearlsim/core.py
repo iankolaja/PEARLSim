@@ -291,7 +291,7 @@ class Core():
                 fuel_flag_array += [0]
                 cs137_array += [0]
 
-            detector_text += f"det peb_{i}_{round(data['r'],4)}_{round(data['z'],4)}_ ds peb{detector_id}_s -1 de standard_grid\n"
+            detector_text += f"det peb_{i}_{round(data['x'],4)}_{round(data['y'],4)}_{round(data['z'],4)}_ ds peb{detector_id}_s -1 de standard_grid\n"
 
         auxiliary_features = pd.DataFrame({"temperature": temperature_array,
                                            "cs137": cs137_array,

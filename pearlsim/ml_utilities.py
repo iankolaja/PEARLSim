@@ -6,8 +6,10 @@ def read_det_file(file_name, energy_bins_lower=(0.0, 3e-08, 5.8e-08, 1.4e-07, 2.
                                             4e-06, 4.8052e-05, 0.00553, 0.821, 2.231)):
     reading=False
     skip_names = ["E", "PHI", "Z", "R"]
-    radius_array = []
-    height_array = []
+    id_array = []
+    x_array = []
+    y_array = []
+    z_array = []
     pebble_flux_matrix = []
     with open(file_name, 'r') as f:
         for line in f:
@@ -19,8 +21,10 @@ def read_det_file(file_name, energy_bins_lower=(0.0, 3e-08, 5.8e-08, 1.4e-07, 2.
                     unc_array = []
                     if "peb" in line:
                         header = line.split("_")
-                        radius_array += [float(header[1])]
-                        height_array += [float(header[2])]
+                        id_array += [int(header[1])]
+                        x_array += [float(header[2])]
+                        y_array += [float(header[3])]
+                        z_array += [float(header[4])]
                         set_name = "peb"
                     else:
                         set_name = "core_map"
@@ -36,14 +40,14 @@ def read_det_file(file_name, energy_bins_lower=(0.0, 3e-08, 5.8e-08, 1.4e-07, 2.
                 data_array += [data]
                 unc_array += [unc]
     pebble_flux_matrix = np.array(pebble_flux_matrix)
-    features = pd.DataFrame({"radius": radius_array, "height": height_array})
+    features = pd.DataFrame({"x": x_array, "y": y_array, "z": z_array })
     num_detectors = len(features)
     core_flux_headers = ["bin" + str(n) for n in range(1, 1 + len(core_flux))]
     features = pd.concat([features, pd.DataFrame([core_flux]*num_detectors,
                           columns=core_flux_headers)], axis=1)
     targets = pd.DataFrame(pebble_flux_matrix, columns=energy_bins_lower)
     avg_uncertainty = np.mean(np.array(unc_array))
-    return features, targets, avg_uncertainty
+    return features, targets, id_array, avg_uncertainty
 
 
 def extract_from_bumat(file_path):

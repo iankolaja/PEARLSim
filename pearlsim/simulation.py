@@ -200,7 +200,8 @@ class Simulation():
                     self.days += self.core.burnup_time
                 self.core.iteration += 1
             elif serpent_flag == 2:
-                self.core.update_from_bumat(self.debug)
+                if self.num_training_data == 0:
+                    self.core.update_from_bumat(self.debug)
                 self.core.iteration += 1
 
         if keyword == "set":

@@ -122,7 +122,7 @@ class Simulation():
             try:
                 with open("../"+file_path, 'r') as f:
                     self.core.core_geometry = f.read()
-                print(f"Loaded {line[1]} core geometry.")
+                print(f"Loaded {file_path} core geometry.")
             except:
                     print(f"Failed to load {file_path}. Does the file exist?")
 

@@ -273,6 +273,7 @@ class Core():
         # Extra features to track per pebble
         temperature_array = []
         cs137_array = []
+        xe135_array = []
         fuel_flag_array = []
 
         for i in pebble_ids:
@@ -287,14 +288,19 @@ class Core():
                     cs137_array += [self.materials[mat_name].concentrations['551370']]
                 else:
                     cs137_array += [0]
+                if '54135<lib>' in self.materials[mat_name].concentrations.keys():
+                    xe135_array += [self.materials[mat_name].concentrations['54135<lib>']]
+                else:
+                    xe135_array += [0]
             else:
                 fuel_flag_array += [0]
                 cs137_array += [0]
+                xe135_array += [0]
 
             detector_text += f"det peb_{i}_{round(data['x'],4)}_{round(data['y'],4)}_{round(data['z'],4)}_ ds peb{detector_id}_s -1 de standard_grid\n"
 
-        auxiliary_features = pd.DataFrame({"temperature": temperature_array,
-                                           "cs137": cs137_array,
+        auxiliary_features = pd.DataFrame({"cs137": cs137_array,
+                                           "xe135": xe135_array,
                                            "is_fuel": fuel_flag_array})
         auxiliary_features.to_csv(f"current_auxiliary_features{self.iteration}.csv")
         return detector_text

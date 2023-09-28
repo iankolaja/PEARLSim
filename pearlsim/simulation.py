@@ -181,6 +181,28 @@ class Simulation():
                     self.core.update_from_bumat(self.debug)
                     self.core.iteration += 1
 
+        if keyword == "transport":
+            serpent_flag = int(line[1]) # 0 for no serpent, 1 to run serpent, 2 to use serpent results that already exist
+            if serpent_flag == 1:
+                input_name = self.core.generate_input(self.serpent_settings,
+                                                      self.num_training_data,
+                                                      self.debug)
+                if self.num_nodes > 1:
+                    print(f"Running with {self.num_nodes} nodes.")
+                    os.system(f"mpirun -np {self.num_nodes} --map-by ppr:1:node:pe={self.cpu_cores}"
+                              f" sss2_2_0 -omp {self.cpu_cores} {input_name}")
+                else:
+                    print(f"Running with {self.cpu_cores} cores.")
+                    os.system(f"sss2_2_0 {input_name} -omp {self.cpu_cores}")
+                self.core.save_zone_maps(f"zone_map{self.core.iteration}.json")
+                if self.num_training_data == 0:
+                    self.core.update_from_bumat(self.debug)
+                    self.days += self.core.burnup_time
+                self.core.iteration += 1
+            elif serpent_flag == 2:
+                self.core.update_from_bumat(self.debug)
+                self.core.iteration += 1
+
         if keyword == "set":
             setting = line[1]
             value = raw_line.split(setting)[1].replace("\n","")

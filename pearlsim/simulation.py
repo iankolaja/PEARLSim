@@ -53,10 +53,10 @@ class Simulation():
             self.core.burn_time = float(line[1])
 
         if keyword == "num_cores":
-            self.core.cpu_cores = int(line[1])
+            self.cpu_cores = int(line[1])
 
         if keyword == "num_nodes":
-            self.core.num_nodes = int(line[1])
+            self.num_nodes = int(line[1])
 
         if keyword == "power":
             self.core.power = float(line[1])

@@ -87,12 +87,12 @@ class Material():
     def write_input(self, triso_counter, static_fuel_mats, debug):
         self.cross_section_str = get_cross_section_string(self.temperature)
         if self.density == "sum fix":
-            density_s = f"sum fix {self.cross_section_str[1:]} {self.temperature}"
+            density_s = f"sum fix {self.cross_section_str[1:]} {round(self.temperature,3)}"
         else:
             density_s = self.density
         if debug >= 3:
             print(f"Writing material {self.name}")
-        input_s = f"mat {self.name} {density_s} rgb {self.rgb[0]} {self.rgb[1]} {self.rgb[2]}  tmp {self.temperature}"
+        input_s = f"mat {self.name} {density_s} rgb {self.rgb[0]} {self.rgb[1]} {self.rgb[2]}  tmp {round(self.temperature,3)}"
         if "graph" in self.name:
             input_s += " moder  grph 6000\n"
         else:
@@ -110,7 +110,7 @@ class Material():
                 input_s += f"mat {self.name}_{name} {other_mat.density} rgb {other_mat.rgb[0]+rgb_modifier*10} " \
                            f"{other_mat.rgb[1]+rgb_modifier*10} " \
                            f"{other_mat.rgb[2]+rgb_modifier*10} " \
-                           f"tmp {self.temperature} moder  grph 6000\n"
+                           f"tmp {round(self.temperature,3)} moder  grph 6000\n"
                 for key in other_mat.concentrations.keys():
                     conc_str = f"  {key}    {other_mat.concentrations[key]}\n".replace("<lib>", self.cross_section_str)
                     input_s += conc_str

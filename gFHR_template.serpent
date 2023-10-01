@@ -150,7 +150,28 @@ cell c_flibe u_flibe FLiBeInC -infinite
 
 %%%%%%%%%%% Simulation parameters %%%%%%%%%%%
 
-ene standard_grid 4 cas12_ext
+ene standard_grid 1
+1.00000e-11
+5.80000e-08
+1.40000e-07
+2.80000e-07
+6.25000e-07
+9.72000e-07
+1.15000e-06
+1.85500e-06
+4.00000e-06
+9.87700e-06
+1.59680e-05
+1.48728e-04
+5.53000e-03
+9.11800e-03
+1.11000e-01
+5.00000e-01
+8.21000e-01
+2.23100e+00
+1.00000e+01
+
+
 det core_map n
   de standard_grid
   dn 1

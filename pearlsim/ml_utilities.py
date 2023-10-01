@@ -2,9 +2,16 @@ import numpy as np
 import pandas as pd
 from pearlsim.material import get_cross_section_string
 
-def read_det_file(file_name, energy_bins_lower=(0.0, 3e-08, 5.8e-08, 1.4e-07, 2.8e-07, 3.5e-07, 6.25e-07,
-                                            4e-06, 4.8052e-05, 0.00553, 0.821, 2.231)):
+# Energy grid that is also defined in Serpent template files
+ENERGY_BINS = np.array([1e-11, 5.8e-08, 1.4e-07, 2.8e-07, 6.25e-07, 9.72e-07, 1.15e-06,
+                        1.855e-06, 4e-06, 9.877e-06, 1.5968e-05, 0.000148728, 0.00553,
+                        0.009118, 0.111, 0.5, 0.821, 2.231, 10])
+ENERGY_CENTERS = (ENERGY_BINS[1:] + ENERGY_BINS[:-1])/2
+
+
+def read_det_file(file_name):
     reading=False
+    energy_centers = ENERGY_CENTERS
     skip_names = ["E", "PHI", "Z", "R"]
     id_array = []
     x_array = []
@@ -45,7 +52,7 @@ def read_det_file(file_name, energy_bins_lower=(0.0, 3e-08, 5.8e-08, 1.4e-07, 2.
     core_flux_headers = ["bin" + str(n) for n in range(1, 1 + len(core_flux))]
     features = pd.concat([features, pd.DataFrame([core_flux]*num_detectors,
                           columns=core_flux_headers)], axis=1)
-    targets = pd.DataFrame(pebble_flux_matrix, columns=energy_bins_lower)
+    targets = pd.DataFrame(pebble_flux_matrix, columns=energy_centers)
     avg_uncertainty = np.mean(np.array(unc_array))
     return features, targets, id_array, avg_uncertainty
 
@@ -77,10 +84,9 @@ def extract_from_bumat(file_path):
     concentrations += [current_conc]
     return concentrations
 
-def generate_pebble_burnup_model(template_path, surface_current, power, concentrations, temp, time,
-                                 energy_bins=[3e-08, 5.8e-08, 1.4e-07, 2.8e-07, 3.5e-07, 6.25e-07,
-                                              4e-06, 4.8052e-05, 0.00553, 0.821, 2.231, 10]):
+def generate_pebble_burnup_model(template_path, surface_current, power, concentrations, temp, time):
     lib_str = get_cross_section_string(temp)
+    energy_bins = ENERGY_BINS
     with open(template_path, "r") as f:
         input_s = f.read()
     concentration_s = ""
@@ -91,8 +97,8 @@ def generate_pebble_burnup_model(template_path, surface_current, power, concentr
     input_s = input_s.replace("<time>", str(time))
     input_s = input_s.replace("<power>", str(power))
 
-    weights = (surface_current/1e9).astype(int)
-    source_str = f"sb {len(weights)+1} 1\n  0 0 \n"
+    weights = [0]+list((surface_current/1e9).astype(int))
+    source_str = f"sb {len(weights)} 1\n"
     for i in range(len(surface_current)):
         source_str += f"  {energy_bins[i]} {weights[i]}\n"
     input_s = input_s.replace("<current>", source_str)

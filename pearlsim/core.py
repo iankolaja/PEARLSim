@@ -284,8 +284,8 @@ class Core():
             temperature_array += [self.materials[mat_name].temperature]
             if "fuel" in mat_name:
                 fuel_flag_array += [1]
-                if "551370" in self.materials[mat_name].concentrations.keys():
-                    cs137_array += [self.materials[mat_name].concentrations['551370']]
+                if "55137<lib>" in self.materials[mat_name].concentrations.keys():
+                    cs137_array += [self.materials[mat_name].concentrations['55137<lib>']]
                 else:
                     cs137_array += [0]
                 if '54135<lib>' in self.materials[mat_name].concentrations.keys():

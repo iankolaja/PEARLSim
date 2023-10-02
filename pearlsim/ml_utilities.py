@@ -98,7 +98,7 @@ def generate_pebble_burnup_model(template_path, surface_current, power, concentr
     input_s = input_s.replace("<power>", str(power))
 
     weights = [0]+list((surface_current/1e9).astype(int))
-    source_str = f"sb {len(weights)} 1\n"
+    source_str = f"sb {len(weights)-1} 1\n"
     for i in range(len(surface_current)):
         source_str += f"  {energy_bins[i]} {weights[i]}\n"
     input_s = input_s.replace("<current>", source_str)

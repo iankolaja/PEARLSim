@@ -77,7 +77,7 @@ set mvol fuel 1 0.36263376
 
 %%%%%%%%%%% Simulation parameters %%%%%%%%%%%
 
-set nps 80000000
+set nps 60000000
 set ures 1
 set power <power>
 

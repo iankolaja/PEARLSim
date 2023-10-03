@@ -182,11 +182,11 @@ class Simulation():
                     self.core.iteration += 1
                 elif serpent_flag == 3:
                     self.core.update_from_bumat(self.debug)
-                    self.core.iteration += 1
                     input_name = self.core.generate_input(self.serpent_settings,
                                                           self.num_training_data,
                                                           self.debug)
                     self.core.save_zone_maps(f"zone_map{self.core.iteration}.json")
+                    self.core.iteration += 1
 
         if keyword == "transport":
             serpent_flag = int(line[1]) # 0 for no serpent, 1 to run serpent, 2 to use serpent results that already exist
@@ -215,11 +215,11 @@ class Simulation():
                 if self.num_training_data == 0:
                     self.core.update_from_bumat(self.debug)
                     self.days += self.core.burnup_time
-                self.core.iteration += 1
                 input_name = self.core.generate_input(self.serpent_settings,
                                                       self.num_training_data,
                                                       self.debug)
                 self.core.save_zone_maps(f"zone_map{self.core.iteration}.json")
+                self.core.iteration += 1
 
         if keyword == "set":
             setting = line[1]

@@ -212,7 +212,9 @@ class Simulation():
                     self.days += self.core.burnup_time
                 self.core.iteration += 1
             elif serpent_flag == 3:
-                self.core.update_from_bumat(self.debug)
+                if self.num_training_data == 0:
+                    self.core.update_from_bumat(self.debug)
+                    self.days += self.core.burnup_time
                 self.core.iteration += 1
                 input_name = self.core.generate_input(self.serpent_settings,
                                                       self.num_training_data,

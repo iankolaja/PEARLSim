@@ -103,3 +103,17 @@ def generate_pebble_burnup_model(template_path, surface_current, power, concentr
         source_str += f"  {energy_bins[i]} {weights[i]}\n"
     input_s = input_s.replace("<current>", source_str)
     return input_s
+
+
+def standardize(raw_data, mean=None, std=None, axis=0):
+    if mean is None:
+        mean = np.mean(raw_data, axis = axis)
+    if std is None:
+        std = np.std(raw_data, axis = axis)
+        std[ std==0 ] = 0.1
+    result = (raw_data - mean) / std
+    return result, mean, std
+
+def unstandardize(standardized_data, mean, std):
+    raw_data = (standardized_data*std)+mean
+    return raw_data

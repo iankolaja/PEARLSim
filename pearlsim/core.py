@@ -34,9 +34,9 @@ def _get_fuel_types(inventory):
 
 
 class Core():
-    def __init__(self):
+    def __init__(self, simulation_name):
         self.zones = []
-        self.simulation_name = "gFHR_core"
+        self.simulation_name = simulation_name
         self.radial_bound_points = []
         self.axial_zone_bounds = []
         self.num_r = 0
@@ -45,7 +45,6 @@ class Core():
         self.max_passes = 8
         self.iteration = 1
         self.pebble_radius = 2.0
-        self.burnup_time = 6.525
         self.num_top_zone_pebbles = 0
         self.materials = {}
         self.fresh_pebbles = {}
@@ -56,7 +55,6 @@ class Core():
         self.always_remove_graphite = True
 
     def define_zones(self, zone_file, pebble_file, debug=0):
-        pebble_locations = []
         with open(zone_file, 'r') as zone_f:
             radial_channel_num = 0
             radial_zones = []
@@ -69,11 +67,6 @@ class Core():
                     keyword = ""
                 if keyword == "radial_channel":
                     radial_channel_num += 1
-#                    if radial_channel_num > 1:
-#                        self.zones += [radial_zones]
-#                        self.axial_zone_counts += [axial_zone_num]
-#                    axial_zone_num = 0
-#                    radial_zones = []
                     points = []
                 if keyword == "z_divisions":
                     axial_bounds = np.array(line[1:]).astype(float)
@@ -83,8 +76,6 @@ class Core():
                     self.radial_bound_points += [np.array(points)]
                     self.axial_zone_bounds += [np.array(axial_bounds)]
 
-                    #axial_zone_num += 1
-                    #radial_zones += [Zone(1, radial_channel_num, axial_zone_num)]
         self.radial_bound_points = self.radial_bound_points
         self.axial_zone_bounds = self.axial_zone_bounds
         self.num_r = len(self.radial_bound_points)
@@ -95,6 +86,14 @@ class Core():
             self.zones += [[]]
             for z in range(self.num_z[-1]):
                 self.zones[r] += [Zone(1, r+1, z+1)]
+        pebble_locations = self.load_pebble_locations(pebble_file, debug)
+        for r in range(self.num_r):
+            self.num_z += [len(self.axial_zone_bounds[r])+1]
+            self.num_top_zone_pebbles += len(self.zones[r][-1].pebble_locations)
+        self.pebble_locations = pd.DataFrame(pebble_locations, columns=["x","y","z","r","zone_r","zone_z"])
+
+    def load_pebble_locations(self, pebble_file, debug):
+        pebble_locations = []
         with open(pebble_file, 'r') as pebble_f:
             for line in pebble_f:
                 line = line.split()
@@ -107,10 +106,8 @@ class Core():
                     print(f"Pebble at {x},{y},{z} (r={r} placed in zone R{zone_r+1}Z{zone_z+1}")
                 self.zones[zone_r][zone_z].pebble_locations += [(x, y, z, r)]
                 pebble_locations += [(x,y,z,r,zone_r,zone_z)]
-        for r in range(self.num_r):
-            self.num_z += [len(self.axial_zone_bounds[r])+1]
-            self.num_top_zone_pebbles += len(self.zones[r][-1].pebble_locations)
-        self.pebble_locations = pd.DataFrame(pebble_locations, columns=["x","y","z","r","zone_r","zone_z"])
+        return pebble_locations
+
     def rename_materials(self, rename_map):
         for key in rename_map.keys():
             new_material = rename_map[key]
@@ -321,10 +318,10 @@ class Core():
         return volumes
 
 
-    def generate_input(self, serpent_settings, num_training_data, debug):
+    def generate_input(self, serpent_settings, num_training_data, burnup_time_step, debug):
         input_str = self.core_geometry
         if num_training_data == 0:
-            input_str += f"dep daystep {self.burnup_time}\n"
+            input_str += f"dep daystep {burnup_time_step}\n"
         for setting in serpent_settings.keys():
             input_str += f"set {setting} {serpent_settings[setting]}\n"
 
@@ -354,7 +351,10 @@ class Core():
             detector_str = self.generate_pebble_detectors(num_training_data, assigned_pebbles)
             input_str += detector_str
 
-        file_name = f"{self.simulation_name}_{self.iteration}.serpent"
+        if num_training_data > 0:
+            file_name = f"{self.simulation_name}_training_{self.iteration}.serpent"
+        else:
+            file_name = f"{self.simulation_name}_{self.iteration}.serpent"
         with open(file_name, 'w') as f:
             f.write(input_str)
         return file_name
@@ -370,9 +370,19 @@ class Core():
             f.write(zone_str)
         return zone_str
 
+    def load_zone_maps(self, file_name):
+        with open(file_name, 'r') as f:
+            zone_map = json.load(f)
+        for zone_key in zone_map.keys():
+            radial_zone = int(zone_key.split("R")[1].split("Z")[0])-1
+            axial_zone = int("zoneR1Z1".split("R")[1].split("Z")[1])-1
+            self.zones[radial_zone][axial_zone].inventory = zone_map[zone_key]
 
-    def update_from_bumat(self, debug):
-        bumat_name = f"{self.simulation_name}_{self.iteration}.serpent.bumat1"
+
+    def update_from_bumat(self, debug, iteration=None, step=1):
+        if iteration is None:
+            load_iteration = self.iteration
+        bumat_name = f"{self.simulation_name}_{load_iteration}.serpent.bumat{step}"
         if debug > 0:
             print(f"Reading {bumat_name}")
         with open(bumat_name, 'r') as f:

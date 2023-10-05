@@ -4,20 +4,23 @@ import random
 
 from .core import Core
 from .material import Material
+from .results_processing import read_core_flux
 import numpy as np
 from .pebble_model import Pebble_Model
 import pandas as pd
 import os
 
 class Simulation():
-    def __init__(self):
-        self.core = Core()
+    def __init__(self, simulation_name):
+        self.simulation_name = simulation_name
+        self.core = Core(simulation_name)
         self.cpu_cores = 20
         self.num_nodes = 1
         self.days = 0
+        self.burnup_time_step = 6.525 # days
+        self.cs_discharge_threshold = 1
         self.pebble_model = None
         self.debug = 0
-        self.num_training_data = 0
         self.serpent_settings = {"pop": "10000 50 25"}
     def read_input_file(self, input_file):
         with open(input_file, 'r') as f:
@@ -48,6 +51,7 @@ class Simulation():
                 key = fresh_definitions[i * 2]
                 file_path = fresh_definitions[i * 2 + 1].replace("\n","")
                 self.core.fresh_pebbles[key] = Material(key, "../"+file_path)
+                self.pebble_model.fresh_materials[key] = Material(key, "../"+file_path)
 
         if keyword == "burn_time":
             self.core.burn_time = float(line[1])
@@ -101,10 +105,12 @@ class Simulation():
         if keyword == "define_zones":
             file_path = line[1].replace("\n", "")
             pebble_path = line[2].replace("\n", "")
-            #try:
-            self.core.define_zones("../"+file_path, "../"+pebble_path, debug=self.debug)
-            #except:
-            #    print(f"Failed to define zones from {file_path}. Is the file valid?")
+            try:
+                self.core.define_zones("../"+file_path, "../"+pebble_path, debug=self.debug)
+                self.pebble_model.radial_bound_points = self.core.radial_bound_points
+                self.pebble_model.axial_zone_bounds = self.core.axial_zone_bounds
+            except:
+                print(f"Failed to define zones from {file_path}. Is the file valid?")
 
         if keyword == "pebble_model":
             model_type = line[1]
@@ -112,10 +118,6 @@ class Simulation():
             if model_type == "RFR":
                 self.pebble_model = Pebble_Model(model_type, "../"+file_path)
 
-        if keyword == "num_training_data":
-            points = int(line[1].replace("\n", ""))
-            print(f"Generating {points} training data points.")
-            self.num_training_data = points
 
         if keyword == "core_geometry":
             file_path = line[1].replace("\n", "").replace('\"','')
@@ -145,37 +147,27 @@ class Simulation():
                     zone.initialize(insertion_ratios, debug=self.debug)
                     self.core.initialize_materials(zone.inventory)
                     print(f"Initialized zone R{zone.radial_num}Z{zone.axial_num}")
-            self.pebble_model.distribute_pebbles(num_pebbles, self.core.pebble_locations,
-                                                 self.core.fresh_pebbles,insertion_ratios, debug=self.debug)
+            self.pebble_model.initialize_pebbles(num_pebbles, self.core.pebble_locations,
+                                                insertion_ratios, debug=self.debug)
             print("Finished initializing zones.")
 
 
         if keyword == "insertion":
             num_steps = int(line[1])
-            threshold = float(line[2])
+            couple_flag = get_boolean(line[2])
             serpent_flag = int(line[3]) # 0 for no serpent, 1 to run serpent, 2 to use serpent results that already exist
-            fuel_ratios = line[4:]
-            num_definitions = int(len(fuel_ratios)/2)
-            insertion_ratios = []
-            for i in range(num_definitions):
-                insertion_ratios += [(fuel_ratios[i * 2], float(fuel_ratios[i * 2 + 1]))]
+            insertion_ratios = get_insertion_ratio_pairs(line[4:])
             for step in range(num_steps):
-                self.core.insert(insertion_ratios, threshold, self.pebble_model, debug=self.debug)
+                self.core.insert(insertion_ratios, self.cs_discharge_threshold, self.pebble_model, debug=self.debug)
                 if serpent_flag == 1:
                     input_name = self.core.generate_input(self.serpent_settings,
-                                                          self.num_training_data,
+                                                          0,
+                                                          self.burnup_time_step,
                                                           self.debug)
-                    if self.num_nodes > 1:
-                        print(f"Running with {self.num_nodes} nodes.")
-                        os.system(f"mpirun -np {self.num_nodes} --map-by ppr:1:node:pe={self.cpu_cores}"
-                                  f" sss2_2_0 -omp {self.cpu_cores} {input_name}")
-                    else:
-                        print(f"Running with {self.cpu_cores} cores.")
-                        os.system(f"sss2_2_0 {input_name} -omp {self.cpu_cores}")
+                    self.run_serpent(input_name)
                     self.core.save_zone_maps(f"zone_map{self.core.iteration}.json")
-                    if self.num_training_data == 0:
-                        self.core.update_from_bumat(self.debug)
-                        self.days += self.core.burnup_time
+                    self.core.update_from_bumat(self.debug)
+                    self.days += self.burnup_time_step
                     self.core.iteration += 1
                 elif serpent_flag == 2:
                     self.core.update_from_bumat(self.debug)
@@ -183,40 +175,73 @@ class Simulation():
                 elif serpent_flag == 3:
                     self.core.update_from_bumat(self.debug)
                     input_name = self.core.generate_input(self.serpent_settings,
-                                                          self.num_training_data,
+                                                          0,
+                                                          self.burnup_time_step,
                                                           self.debug)
                     self.core.save_zone_maps(f"zone_map{self.core.iteration}.json")
                     self.core.iteration += 1
+
+        if keyword == "set_threshold":
+            self.cs_discharge_threshold = float(line[1])
+            print(f"Set discharge cs137 concentration to {self.cs_discharge_threshold}.")
+
+        if keyword == "set_burnup_timestep":
+            self.burnup_time_step = float(line[1])
+            print(f"Set burnup time step to {self.burnup_time_step} days.")
+
+        if keyword == "load_from_step":
+            load_iteration = int(line[1])
+            if len(line) > 2:
+                burnup_step = int(line[2])
+            else:
+                burnup_step = 0
+            self.load_from_step(load_iteration, burnup_step)
+
+
+        if keyword == "simulate_pebbles":
+            num_steps = int(line[1])
+            num_substeps = int(line[2])
+            starting_step = int(line[3])
+            insertion_ratios = get_insertion_ratio_pairs(line[4:])
+            for i in range(starting_step, num_steps+1):
+                core_flux_map = read_core_flux(f"gFHR_core_{i}.serpent_det0.m")
+                self.pebble_model.update_model(i, self.burnup_time_step, num_substeps, core_flux_map,
+                                               insertion_ratios, self.cs_discharge_threshold, self.debug)
+
+        if keyword == "generate_training_data":
+            step = int(line[1])
+            num_training_data = int(line[2])
+            self.load_from_step(step, 0)
+            print(f"Generating {num_training_data} points of training data from step {step}.")
+            input_name = self.core.generate_input(self.serpent_settings,
+                                                  num_training_data,
+                                                  self.burnup_time_step,
+                                                  self.debug)
+            self.run_serpent(input_name)
+
 
         if keyword == "transport":
             serpent_flag = int(line[1]) # 0 for no serpent, 1 to run serpent, 2 to use serpent results that already exist
             if serpent_flag == 1:
                 input_name = self.core.generate_input(self.serpent_settings,
-                                                      self.num_training_data,
+                                                      0,
+                                                      self.burnup_time_step,
                                                       self.debug)
-                if self.num_nodes > 1:
-                    print(f"Running with {self.num_nodes} nodes.")
-                    os.system(f"mpirun -np {self.num_nodes} --map-by ppr:1:node:pe={self.cpu_cores}"
-                              f" sss2_2_0 -omp {self.cpu_cores} {input_name}")
-                else:
-                    print(f"Running with {self.cpu_cores} cores.")
-                    os.system(f"sss2_2_0 {input_name} -omp {self.cpu_cores}")
+                self.run_serpent(input_name)
                 self.core.save_zone_maps(f"zone_map{self.core.iteration}.json")
-                if self.num_training_data == 0:
-                    self.core.update_from_bumat(self.debug)
-                    self.days += self.core.burnup_time
+                self.core.update_from_bumat(self.debug)
+                self.days += self.burnup_time_step
                 self.core.iteration += 1
             elif serpent_flag == 2:
-                if self.num_training_data == 0:
-                    self.core.update_from_bumat(self.debug)
-                    self.days += self.core.burnup_time
+                self.core.update_from_bumat(self.debug)
+                self.days += self.burnup_time_step
                 self.core.iteration += 1
             elif serpent_flag == 3:
-                if self.num_training_data == 0:
-                    self.core.update_from_bumat(self.debug)
-                    self.days += self.core.burnup_time
+                self.core.update_from_bumat(self.debug)
+                self.days += self.burnup_time_step
                 input_name = self.core.generate_input(self.serpent_settings,
-                                                      self.num_training_data,
+                                                      0,
+                                                      self.burnup_time_step,
                                                       self.debug)
                 self.core.save_zone_maps(f"zone_map{self.core.iteration}.json")
                 self.core.iteration += 1
@@ -228,3 +253,33 @@ class Simulation():
                 self.serpent_settings.pop(setting)
             else:
                 self.serpent_settings[setting] = value
+
+    def load_from_step(self, load_iteration, burnup_step):
+        self.core.update_from_bumat(self.debug, iteration=load_iteration, step=burnup_step)
+        self.core.load_zone_maps(f"zone_map{load_iteration}.json")
+        self.core.load_pebble_locations(f"pebble_positions_{load_iteration}.csv", debug=self.debug)
+
+    def run_serpent(self, input_name):
+        if self.num_nodes > 1:
+            print(f"Running with {self.num_nodes} nodes.")
+            os.system(f"mpirun -np {self.num_nodes} --map-by ppr:1:node:pe={self.cpu_cores}"
+                      f" sss2_2_0 -omp {self.cpu_cores} {input_name}")
+        else:
+            print(f"Running with {self.cpu_cores} cores.")
+            os.system(f"sss2_2_0 {input_name} -omp {self.cpu_cores}")
+
+def get_boolean(input_argument):
+    input_argument = input_argument.replace("\n","")
+    if input_argument in ["1", "true", "True", "yes", "Yes", "on"]:
+        return True
+    elif input_argument in ["0", "false", "False", "no", "No", "off"]:
+        return False
+    else:
+        raise TypeError("Invalid flag value provided.")
+
+def get_insertion_ratio_pairs(list_of_definitions):
+    num_definitions = int(len(list_of_definitions) / 2)
+    insertion_ratio_pairs = []
+    for i in range(num_definitions):
+        insertion_ratio_pairs += [(list_of_definitions[i * 2], float(list_of_definitions[i * 2 + 1]))]
+    return insertion_ratio_pairs

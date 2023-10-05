@@ -186,6 +186,7 @@ class Pebble_Model():
             current_df, _, _ = standardize(current_df,
                                            self.current_data_mean,
                                            self.current_data_std)
+            print(current_df)
             if self.current_library == "sklearn":
                 predicted_currents = self.current_model.predict(current_df)
             else:

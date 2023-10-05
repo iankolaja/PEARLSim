@@ -19,6 +19,10 @@ class Pebble():
         self.intial_fuel = material_source
         self.in_core = True
         self.material = Material(f"pebble{id}", material_source)
+        if "92235<lib>" in self.material.concentrations:
+            self.is_fuel = True
+        else:
+            self.is_fuel = False
 
     def reinsert(self, distribution):
         x_val, y_val, z_val = distribution(1)
@@ -94,10 +98,10 @@ class Pebble_Model():
             self.current_model = pickle.loads(f.read())
         self.current_library = library
 
-        self.current_data_mean = pd.read_csv(current_data_mean_path, index_col=0)
-        self.current_data_std = pd.read_csv(current_data_std_path, index_col=0)
-        self.current_target_mean = pd.read_csv(current_target_mean_path, index_col=0)
-        self.current_target_std = pd.read_csv(current_target_std_path, index_col=0)
+        self.current_data_mean = pd.read_csv(current_data_mean_path, index_col=0).iloc[:,0]
+        self.current_data_std = pd.read_csv(current_data_std_path, index_col=0).iloc[:,0]
+        self.current_target_mean = pd.read_csv(current_target_mean_path, index_col=0).iloc[:,0]
+        self.current_target_std = pd.read_csv(current_target_std_path, index_col=0).iloc[:,0]
 
 
     def load_burnup_model(self, burnup_model_path,
@@ -117,20 +121,21 @@ class Pebble_Model():
 
         with open(burnup_model_path, 'rb') as f:
             self.burnup_model = pickle.loads(f.read())
+        self.burnup_library = library
 
-        self.burnup_data_mean = pd.read_csv(burnup_data_mean_path, index_col=0)
-        self.burnup_data_std = pd.read_csv(burnup_data_std_path, index_col=0)
-        self.burnup_target_mean = pd.read_csv(burnup_target_mean_path, index_col=0)
-        self.burnup_target_std = pd.read_csv(burnup_target_std_path, index_col=0)
+        self.burnup_data_mean = pd.read_csv(burnup_data_mean_path, index_col=0).iloc[:,0]
+        self.burnup_data_std = pd.read_csv(burnup_data_std_path, index_col=0).iloc[:,0]
+        self.burnup_target_mean = pd.read_csv(burnup_target_mean_path, index_col=0).iloc[:,0]
+        self.burnup_target_std = pd.read_csv(burnup_target_std_path, index_col=0).iloc[:,0]
     def get_velocity(self, z, r):
         for i in reversed(range(len(self.velocity_profile))):
-            if z > self.velocity_profile[i][0]:
+            if z >= self.velocity_profile[i][0]:
                 return self.velocity_profile[i][1](r)
 
 
-    def update_model(self, iteration, time, num_steps, core_flux, insertion_ratios, threshold, debug):
-        time_step = time/num_steps
-        day_step = time_step/86400
+    def update_model(self, iteration, day_step, num_substeps, core_flux, insertion_ratios, threshold, debug):
+        time_step = day_step/num_substeps*86400
+        burn_step_day = day_step/num_substeps
         num_pebbles = len(self.pebbles)
 
         # Track removal of pebble types for feedback into zone model
@@ -145,14 +150,16 @@ class Pebble_Model():
         isfuel_array = np.ones(num_pebbles)
 
         conc_array = [None]*num_pebbles
-        depletion_time_array = np.full(num_pebbles, day_step)
-
+        depletion_time_array = np.full(num_pebbles, burn_step_day)
+        
         discharge_data_index = 0
         discharge_data = {}
         discard_data_index = 0
         discard_data = {}
 
-        for sub_step in range(num_steps):
+        for sub_step in range(num_substeps):
+            self.discharge_indices = []
+            self.discard_indices = []
             for p in range(num_pebbles):
                 peb = self.pebbles[p]
 
@@ -177,59 +184,85 @@ class Pebble_Model():
                     xe135_array[p] = 0
 
             # Put together df for current ML model to use and predict
+            if debug > 0:
+                print("Creating current dataframe...")
             current_df = pd.DataFrame({"radius": radius_array,
                                       "height": height_array,
                                       "cs137": cs137_array,
                                       "xe135": xe135_array,
-                                      "isfuel": isfuel_array})
-            print(current_df)
+                                      "is_fuel": isfuel_array})
             core_flux = core_flux.iloc[core_flux.index.repeat(len(current_df))].reset_index(drop=True)
-            print(core_flux)
-            current_df.join(core_flux)
+            current_df = pd.concat([current_df,core_flux], axis=1)
+            if debug > 0:
+                print("Standardizing current dataframe...")
             current_df, _, _ = standardize(current_df,
                                            self.current_data_mean,
                                            self.current_data_std)
-            print(current_df)
+            if debug > 0:
+                print("Predicting pebble currents...")
             if self.current_library == "sklearn":
                 predicted_currents = self.current_model.predict(current_df)
+                predicted_currents = pd.DataFrame(predicted_currents, columns=self.current_target_mean.axes[0].tolist())
             else:
                 predicted_currents = self.current_model.predict(current_df)
+             
             predicted_currents = unstandardize(predicted_currents,
                                                self.current_target_mean,
                                                self.current_target_std)
-
             # Use predicted currents + other features like concentrations for burnup model
-            burnup_df = pd.DataFrame(pd.DataFrame({"depletion_time": depletion_time_array}))
-            burnup_df.join(predicted_currents)
-            conc_df = pd.DataFrame(conc_array).fillna(0)
-            burnup_df.join(conc_df)
-
+            if debug > 0:
+                print("Creating burnup dataframe...")
+            burnup_df = pd.DataFrame({"depletion_time": depletion_time_array})
+            predicted_current_df = predicted_currents.drop(columns="power") 
+            burnup_df = pd.concat([burnup_df, predicted_current_df], axis=1)
+            conc_df = pd.DataFrame(conc_array, columns=self.burnup_target_mean.axes[0].tolist()).fillna(0)
+            burnup_df = pd.concat([burnup_df, conc_df], axis=1)
+            burnup_df['power'] = predicted_currents['power']
+            
+            if debug > 0:
+                print("Log standardizing burnup dataframe...")
+            burnup_df_log = burnup_df.apply(lambda x: np.log10(x + 1))
+            burnup_df_log['power'] = burnup_df['power']
+            burnup_df_log['depletion_time'] = burnup_df['depletion_time']
+            burnup_df_stan, _, _ = standardize(burnup_df_log, 
+                                          self.burnup_data_mean,
+                                          self.burnup_data_std)
+            if debug > 0:
+                print("Predicting concentration changes from burnup...")
             if self.burnup_library == "sklearn":
-                predicted_conc = self.burnup_model.predict(burnup_df)
+                predicted_conc_stan = self.burnup_model.predict(burnup_df_stan)
+                predicted_conc_stan = pd.DataFrame(predicted_conc_stan, columns=self.burnup_target_mean.axes[0].tolist())
             else:
-                predicted_conc = self.burnup_model.predict(burnup_df)
-            predicted_conc, _, _ = unstandardize(predicted_conc,
+                predicted_conc_stan = self.burnup_model.predict(burnup_df)
+            predicted_conc_log = unstandardize(predicted_conc_stan,
                                            self.burnup_target_mean,
                                            self.burnup_target_std)
+            predicted_conc = predicted_conc_log.apply(lambda x:10**(x)-1)
 
-            # Iterate through pebbles again to update concentrations
+            if debug > 0:
+                print("Updating fuel pebble concentrations...")
             for p in range(num_pebbles):
-                if self.pebbles[p].in_core:
-                    self.pebbles[p].material.concentrations = predicted_conc.iloc[p].to_dict()
+                peb = self.pebbles[p] 
+                if peb.in_core and peb.is_fuel:
+                    peb.material.concentrations = predicted_conc.iloc[p].to_dict()
+
+            if debug > 0:
+                print("Removing pebbles above threshold...")
             pebbles_modeled_by_zone, pebbles_removed_by_zone = self.remove_spent_pebbles(threshold,
                                                                                          pebbles_modeled_by_zone,
                                                                                          pebbles_removed_by_zone,
                                                                                          True)
 
-            # Track and write discharge pebble data on each sub-iteration
+            if debug > 0:
+                print("Writing discharged and discarded pebble data...")
             for p in self.discharge_indices:
-                peb = self.pebbles.p
+                peb = self.pebbles[p]
                 if p in self.discard_indices:
                     discard_data[discard_data_index] = {
                         "features": {
                             "radius": peb.r
                         },
-                        "concentration": peb.Material.concentrations
+                        "concentration": peb.material.concentrations
                     }
                     discard_data_index += 1
                 else:
@@ -237,14 +270,14 @@ class Pebble_Model():
                         "features": {
                             "radius": peb.r
                         },
-                        "concentration": peb.Material.concentrations
+                        "concentration": peb.material.concentrations
                     }
                     discharge_data_index += 1
 
             with open(f"discharge_pebbles_{iteration}_{sub_step}.json", 'w') as file:
-                json.dump(discharge_data, file)
+                json.dump(discharge_data, file, indent=2)
             with open(f"discard_pebbles_{iteration}_{sub_step}.json", 'w') as file:
-                json.dump(discard_data, file)
+                json.dump(discard_data, file, indent=2)
 
             # Reinsert non-discarded pebbles and replace discarded pebbles with fresh ones, all at the bottom
             self.reinsert_pebbles(insertion_ratios, time_step, debug)
@@ -259,6 +292,7 @@ class Pebble_Model():
         return removal_fractions
 
     def initialize_pebbles(self, num_pebbles, pebble_points, initial_inventory, debug=0):
+        self.pebbles = [None]*num_pebbles
         indices = random.choices(range(len(pebble_points)), k=num_pebbles)
         x_vals = pebble_points.iloc[indices]['x'].values
         y_vals = pebble_points.iloc[indices]['y'].values
@@ -270,9 +304,8 @@ class Pebble_Model():
             y = y_vals[i]
             z = z_vals[i]
             mat_name = random.choices(list(initial_inventory.keys()), weights=initial_inventory.values(), k=1)[0]
-            material = deepcopy(self.fresh_materials[mat_name])
-            print(f"Generating {material.name} pebble at x = {x}, y = {y}, z = {z}")
-            self.pebbles += [Pebble(x, y, z, material)]
+            print(f"Generating {mat_name} pebble at x = {x}, y = {y}, z = {z}")
+            self.pebbles[i] = Pebble(x, y, z, self.fresh_materials[mat_name].concentrations.copy())
 
 
     def remove_spent_pebbles(self, threshold, pebbles_modeled_by_zone, pebbles_removed_by_zone, graphite_removal_flag):
@@ -314,16 +347,16 @@ class Pebble_Model():
 
     def reinsert_pebbles(self, insertion_ratios, time_step, debug):
         for i in self.reinsert_indices:
-            self.pebbles[i].reinsert(self.insertion_distribution)
+            peb = self.pebbles[i]
+            peb.reinsert(self.insertion_distribution)
             vz = self.get_velocity(0, peb.r)
-            self.pebbles[i].z = np.random.uniform(0,1)*vz * time_step
+            peb.z = np.random.uniform(0,1)*vz * time_step
             if debug > 1:
-                peb = self.pebbles[i]
                 print(f"Reinserting pebble {peb.id} at x = {peb.x}, y = {peb.y}, z = {peb.z} (pass {peb.pass_num})")
         for i in self.discard_indices:
             x,y,z = self.insertion_distribution(1)
             mat_name = random.choices(list(insertion_ratios.keys()), weights=insertion_ratios.values(), k=1)[0]
-            material = deepcopy(self.fresh_materials[mat_name])
+            material = self.fresh_materials[mat_name].concentrations.copy()
             self.pebbles[i] = Pebble(x, y, z, material)
             vz = self.get_velocity(0, peb.r)
             self.pebbles[i].z = np.random.uniform(0, 1) * vz * time_step

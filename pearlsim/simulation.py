@@ -22,9 +22,10 @@ class Simulation():
         self.pebble_model = None
         self.debug = 0
         self.serpent_settings = {"pop": "10000 50 25"}
-    def read_input_file(self, input_file):
-        with open(input_file, 'r') as f:
+    def read_input_file(self, input_file, directory_name=None):
+        if directory_name is None:
             directory_name = input_file.split("/")[-1].split(".")[0]
+        with open(input_file, 'r') as f:
             try:
                 os.chdir(directory_name)
             except:

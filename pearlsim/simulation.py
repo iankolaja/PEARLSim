@@ -108,13 +108,13 @@ class Simulation():
                 print(f"Failed to define zones from {file_path}. Is the file valid?")
 
         if keyword == "load_pebble_model":
-            current_model_path = line[1]
-            burnup_model_path = line[2].replace("\n","")
+            current_model_path = "../" + line[1]
+            burnup_model_path = "../" + line[2].replace("\n","")
             self.pebble_model = Pebble_Model()
             print(f"Loading current model from {current_model_path}")
-            self.pebble_model.load_current_model("../" + current_model_path)
+            self.pebble_model.load_current_model(current_model_path)
             print(f"Loading burnup model from {burnup_model_path}")
-            self.pebble_model.load_burnup_model("../"+burnup_model_path)
+            self.pebble_model.load_burnup_model(burnup_model_path)
 
 
         if keyword == "core_geometry":

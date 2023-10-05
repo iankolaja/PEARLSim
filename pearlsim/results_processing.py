@@ -20,5 +20,5 @@ def read_core_flux(file_name):
                 data_array += [data]
                 unc_array += [unc]
     core_flux_headers = ["bin" + str(n) for n in range(1, 1 + len(core_flux))]
-    core_flux_map = pd.DataFrame(core_flux, columns=core_flux_headers)
+    core_flux_map = pd.DataFrame([core_flux], columns=core_flux_headers)
     return core_flux_map, avg_uncertainty

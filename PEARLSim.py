@@ -6,14 +6,14 @@ import getopt, sys
 argumentList = sys.argv[1:]
 
 # Options
-options = "hmo:"
+options = "fcnd:"
 
 # Long options
-long_options = ["Help", "My_file", "Output="]
+long_options = ["file", "cores", "nodes", "debug"]
 
-simulation = Simulation()
+simulation_name = "gFHR_equilibrium"
+simulation = Simulation(simulation_name)
 
-input_file = "gFHR_equilibrium.inp"
 num_cores = 20
 
 try:
@@ -31,6 +31,11 @@ try:
             print("Number of cores:", sys.argv[0])
             cores = int(sys.argv[0])
             simulation.cpu_cores = cores
+
+        elif currentArgument in ("-n", "--nodes"):
+            print("Number of nodes:", sys.argv[0])
+            nodes = int(sys.argv[0])
+            simulation.num_nodes = nodes
 
         elif currentArgument in ("-d", "--debug"):
             print("Setting debug level:", sys.argv[0])

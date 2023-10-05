@@ -1,0 +1,7 @@
+# Format is starting z value for bin followed by either a constant A
+# or a function of the form z = A*r + B
+# Units are cm / s
+# for gFHR, axial zones are 31 cm and depletion step is 6.525 days
+# thus vz = 31/6.525/86400 = 5.4987e-05
+
+0 5.4987e-05

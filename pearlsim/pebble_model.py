@@ -53,10 +53,19 @@ class Pebble_Model():
         self.burnup_target_std = []
 
     def load_velocity_model(self, velocity_data_path):
+        """
+        Read velocity profile from file
+        Format is starting z value for bin followed by either a constant A
+        or a function of the form z = A*r + B
+        (Units are cm / s)
+        """
         self.velocity_profile = []
         with open(velocity_data_path, 'r') as f:
             for line in f:
+                if line[0] == "#":
+                    continue
                 line = line.split()
+
                 # Constant velocity provided
                 if len(line) == 2:
                     self.velocity_profile = [ (float(line[0]),

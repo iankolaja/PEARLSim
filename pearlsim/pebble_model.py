@@ -68,12 +68,12 @@ class Pebble_Model():
 
                 # Constant velocity provided
                 if len(line) == 2:
-                    self.velocity_profile = [ (float(line[0]),
-                                               lambda r : float(line[2]) ) ]
+                    self.velocity_profile += [ (float(line[0]),
+                                               lambda r : float(line[1]) ) ]
                 # Linear function provided
                 elif len(line) == 3:
-                    self.velocity_profile = [(float(line[0]),
-                                                lambda r: float(line[2])*r+float(line[3]) )]
+                    self.velocity_profile += [(float(line[0]),
+                                                lambda r: float(line[1])*r+float(line[2]) )]
 
     def load_current_model(self, current_model_path,
                  current_data_mean_path = None,
@@ -124,7 +124,7 @@ class Pebble_Model():
         self.burnup_target_std = pd.read_csv(burnup_target_std_path, index_col=0)
     def get_velocity(self, z, r):
         for i in reversed(range(len(self.velocity_profile))):
-            if z > self.velocity_profile[i]:
+            if z > self.velocity_profile[i][0]:
                 return self.velocity_profile[i][1](r)
 
 

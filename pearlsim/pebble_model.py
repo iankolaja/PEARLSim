@@ -183,9 +183,9 @@ class Pebble_Model():
                                       "xe135": xe135_array,
                                       "isfuel": isfuel_array})
             print(current_df)
-            core_flux = core_flux.iloc[core_flux.index.repeat(len(current_df))].reset_index(drop=True)
+            core_flux_df = core_flux.iloc[core_flux.index.repeat(len(current_df))].reset_index(drop=True)
             print(core_flux)
-            current_df = pd.concat([current_df, core_flux])
+            current_df.join(core_flux_df)
             current_df, _, _ = standardize(current_df,
                                            self.current_data_mean,
                                            self.current_data_std)

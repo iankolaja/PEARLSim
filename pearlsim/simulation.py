@@ -119,7 +119,7 @@ class Simulation():
         if keyword == "load_velocity_profile":
             file_path = line[0].replace("\n","")
             print(f"Loading velocity profile from {file_path}")
-            self.pebble_model.load_velocity_model(file_path)
+            self.pebble_model.load_velocity_model("../"+file_path)
 
         if keyword == "core_geometry":
             file_path = line[1].replace("\n", "").replace('\"','')

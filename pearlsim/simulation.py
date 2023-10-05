@@ -206,6 +206,7 @@ class Simulation():
             starting_step = int(line[3])
             insertion_ratios = get_insertion_ratio_pairs(line[4:])
             for i in range(starting_step, num_steps+1):
+                print(f"Simulating pebbles (Step {i})")
                 core_flux_map, core_flux_avg_unc = read_core_flux(f"gFHR_core_{i}.serpent_det0.m")
                 self.pebble_model.update_model(i, self.burnup_time_step, num_substeps, core_flux_map,
                                                insertion_ratios, self.cs_discharge_threshold, self.debug)

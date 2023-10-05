@@ -73,13 +73,13 @@ class Pebble_Model():
                  current_target_std_path = None,
                  library = "sklearn"):
         if current_data_mean_path is None:
-            current_data_mean_path = current_model_path.split('.')[0] + "_data_mean.csv"
+            current_data_mean_path = current_model_path.strip('.pkl') + "_data_mean.csv"
         if current_data_std_path is None:
-            current_data_std_path = current_model_path.split('.')[0] + "_data_std.csv"
+            current_data_std_path = current_model_path.strip('.pkl') + "_data_std.csv"
         if current_target_mean_path is None:
-            current_target_mean_path = current_model_path.split('.')[0] + "_target_mean.csv"
+            current_target_mean_path = current_model_path.strip('.pkl') + "_target_mean.csv"
         if current_target_std_path is None:
-            current_target_std_path = current_model_path.split('.')[0] + "_target_std.csv"
+            current_target_std_path = current_model_path.strip('.pkl') + "_target_std.csv"
 
         with open(current_model_path, 'rb') as f:
             self.current_model = pickle.loads(f.read())
@@ -98,13 +98,13 @@ class Pebble_Model():
                  burnup_target_std_path = None,
                  library = "sklearn"):
         if burnup_data_mean_path is None:
-            burnup_data_mean_path = burnup_model_path.split('.')[0] + "_data_mean.csv"
+            burnup_data_mean_path = burnup_model_path.strip('.pkl') + "_data_mean.csv"
         if burnup_data_std_path is None:
-            burnup_data_std_path = burnup_model_path.split('.')[0] + "_data_std.csv"
+            burnup_data_std_path = burnup_model_path.strip('.pkl') + "_data_std.csv"
         if burnup_target_mean_path is None:
-            burnup_target_mean_path = burnup_model_path.split('.')[0] + "_target_mean.csv"
+            burnup_target_mean_path = burnup_model_path.strip('.pkl') + "_target_mean.csv"
         if burnup_target_std_path is None:
-            burnup_target_std_path = burnup_model_path.split('.')[0] + "_target_std.csv"
+            burnup_target_std_path = burnup_model_path.strip('.pkl') + "_target_std.csv"
 
         with open(burnup_model_path, 'rb') as f:
             self.burnup_model = pickle.loads(f.read())

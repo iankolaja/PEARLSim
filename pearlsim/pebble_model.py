@@ -185,7 +185,7 @@ class Pebble_Model():
             print(current_df)
             core_flux = core_flux.iloc[core_flux.index.repeat(len(current_df))].reset_index(drop=True)
             print(core_flux)
-            current_df = pd.concat([current_df, core_flux], axis=1)
+            current_df = pd.concat([current_df, core_flux])
             current_df, _, _ = standardize(current_df,
                                            self.current_data_mean,
                                            self.current_data_std)
@@ -247,7 +247,7 @@ class Pebble_Model():
                 json.dump(discard_data, file)
 
             # Reinsert non-discarded pebbles and replace discarded pebbles with fresh ones, all at the bottom
-            self.reinsert_pebbles(insertion_ratios, debug)
+            self.reinsert_pebbles(insertion_ratios, time_step, debug)
 
         # Calculate fractions of pebbles to remove from the zone model
         removal_fractions = {}
@@ -312,9 +312,11 @@ class Pebble_Model():
                     self.reinsert_indices += [i]
         return pebbles_removed_by_zone, pebbles_modeled_by_zone
 
-    def reinsert_pebbles(self, insertion_ratios, debug):
+    def reinsert_pebbles(self, insertion_ratios, time_step, debug):
         for i in self.reinsert_indices:
             self.pebbles[i].reinsert(self.insertion_distribution)
+            vz = self.get_velocity(0, peb.r)
+            self.pebbles[i].z = np.random.uniform(0,1)*vz * time_step
             if debug > 1:
                 peb = self.pebbles[i]
                 print(f"Reinserting pebble {peb.id} at x = {peb.x}, y = {peb.y}, z = {peb.z} (pass {peb.pass_num})")
@@ -322,9 +324,11 @@ class Pebble_Model():
             x,y,z = self.insertion_distribution(1)
             mat_name = random.choices(list(insertion_ratios.keys()), weights=insertion_ratios.values(), k=1)[0]
             material = deepcopy(self.fresh_materials[mat_name])
-            if debug > 1:
-                print(f"Generating {material.name} pebble at x = {x}, y = {y}, z = {z}")
             self.pebbles[i] = Pebble(x, y, z, material)
+            vz = self.get_velocity(0, peb.r)
+            self.pebbles[i].z = np.random.uniform(0, 1) * vz * time_step
+            if debug > 1:
+                print(f"Generating {material.name} pebble at x = {x}, y = {y}, z = {self.pebbles[i].z}")
 
 def gFHR_insertion_distribution(num_pebbles):
     if num_pebbles > 1:

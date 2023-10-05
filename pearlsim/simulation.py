@@ -2,11 +2,11 @@ import pickle
 import random
 
 
-from .core import Core
-from .material import Material
-from .results_processing import read_core_flux
+from pearlsim.core import Core
+from pearlsim.material import Material
+from pearlsim.results_processing import read_core_flux
 import numpy as np
-from .pebble_model import Pebble_Model
+from pearlsim.pebble_model import Pebble_Model
 import pandas as pd
 import os
 

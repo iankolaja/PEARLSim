@@ -24,22 +24,22 @@ try:
     for currentArgument, currentValue in arguments:
 
         if currentArgument in ("-f", "--file"):
-            print("Reading input file:", sys.argv[0])
-            input_file = sys.argv[0]
+            print("Reading input file:", sys.argv[1])
+            input_file = sys.argv[1]
 
         elif currentArgument in ("-c", "--cores"):
-            print("Number of cores:", sys.argv[0])
-            cores = int(sys.argv[0])
+            print("Number of cores:", sys.argv[1])
+            cores = int(sys.argv[1])
             simulation.cpu_cores = cores
 
         elif currentArgument in ("-n", "--nodes"):
-            print("Number of nodes:", sys.argv[0])
-            nodes = int(sys.argv[0])
+            print("Number of nodes:", sys.argv[1])
+            nodes = int(sys.argv[1])
             simulation.num_nodes = nodes
 
         elif currentArgument in ("-d", "--debug"):
-            print("Setting debug level:", sys.argv[0])
-            simulation.debug = int(sys.argv[0])
+            print("Setting debug level:", sys.argv[1])
+            simulation.debug = int(sys.argv[1])
 
 except getopt.error as err:
     # output error, and return with an error code

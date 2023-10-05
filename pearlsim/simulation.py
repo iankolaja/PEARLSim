@@ -106,11 +106,12 @@ class Simulation():
             except:
                 print(f"Failed to define zones from {file_path}. Is the file valid?")
 
-        if keyword == "pebble_model":
-            model_type = line[1]
-            file_path = line[2]
-            if model_type == "RFR":
-                self.pebble_model = Pebble_Model(model_type, "../"+file_path)
+        if keyword == "load_pebble_model":
+            current_model_path = line[1]
+            burnup_model_path = line[2].replace("\n","")
+            self.pebble_model = Pebble_Model()
+            self.pebble_model.load_current_model("../" + current_model_path)
+            self.pebble_model.load_burnup_model("../"+burnup_model_path)
 
 
         if keyword == "core_geometry":

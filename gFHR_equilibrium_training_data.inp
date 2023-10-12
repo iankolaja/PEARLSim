@@ -1,0 +1,41 @@
+set_max_passes 8
+set_seed 42
+debug_level 0
+core_geometry "gFHR_template.serpent"
+triso_file 400 gFHR_triso.dat
+fresh fuel20 materials/fuel20.dat graphpeb materials/graphpeb.dat
+static_fuel_materials SiC materials/SiC_gFHR.dat PyC materials/PyC_gFHR.dat buffer materials/buffer_gFHR.dat matrix materials/matrix_gFHR.dat
+define_zones gFHR_zones.inp gFHR_points.dat
+
+set seed 42
+set acelib "/global/home/groups/co_nuclear/serpent/xsdata/endfb7/sss_endfb7u.xsdata" "/global/home/groups/co_nuclear/serpent_photon_data/mcplib.xsdata"
+set declib "/global/home/groups/co_nuclear/serpent/xsdata/endfb7/sss_endfb7.dec"
+set pdatadir "/global/home/groups/co_nuclear/serpent_photon_data/photon_data"
+set nfylib "/global/home/groups/co_nuclear/serpent/xsdata/endfb7/sss_endfb7.nfy"
+set opti 3
+set gcu -1
+set memfrac 0.99
+set repro 0
+set shbuf 0 0
+set outp 100000
+set nbuf 1000
+set depout 3 1
+set ures 1
+set inventory all
+set printm 1 0
+set fpcut 0
+
+initialize 1 graphpeb 1
+
+# Begin serpent runs here!
+burn_time 6.525
+set power 280e6
+
+set pop 10000 1500 35
+%generate_training_data 1 4000
+generate_training_data 11 4000
+generate_training_data 22 4000
+generate_training_data 35 4000
+generate_training_data 60 4000
+generate_training_data 85 4000
+

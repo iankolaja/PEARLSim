@@ -22,7 +22,7 @@ if args.workingdir:
     directory = args.workingdir
 if args.cores:
     print("Setting number of cores", args.cores)
-    simulation.num_cores = int(args.cores)
+    simulation.cpu_cores = int(args.cores)
 if args.nodes:
     print("Setting number of nodes", args.nodes)
     simulation.num_nodes = int(args.nodes)

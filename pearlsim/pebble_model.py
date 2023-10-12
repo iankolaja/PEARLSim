@@ -14,6 +14,10 @@ class Pebble():
         self.y = y
         self.r = np.sqrt(x**2+y**2)
         self.z = z
+        self.last_x = 0
+        self.last_y = 0
+        self.last_r = 0
+        self.last_z = 0
         self.id = id
         self.pass_num = 1
         self.intial_fuel = material_source
@@ -28,15 +32,16 @@ class Pebble():
         x_val, y_val, z_val = distribution(1)
         self.x = x_val
         self.y = y_val
-        self.z = z_val
+        self.z = 60
         self.pass_num += 1
+        self.in_core = True
         self.r = np.sqrt(self.x**2 + self.y**2)
 
 
 class Pebble_Model():
     def __init__(self):
         self.pebbles = []
-        self.max_z = 429
+        self.max_z = 369.47
         self.insertion_distribution = gFHR_insertion_distribution
         self.fresh_materials = {}
         self.axial_zone_bounds = []
@@ -79,7 +84,7 @@ class Pebble_Model():
                     self.velocity_profile += [(float(line[0]),
                                                 lambda r: float(line[1])*r+float(line[2]) )]
 
-    def load_current_model(self, current_model_path,
+    def load_current_model(self, current_model_path, num_cores,
                  current_data_mean_path = None,
                  current_data_std_path = None,
                  current_target_mean_path = None,
@@ -96,6 +101,8 @@ class Pebble_Model():
 
         with open(current_model_path, 'rb') as f:
             self.current_model = pickle.loads(f.read())
+        if library == "sklearn":
+            self.current_model.set_params(**{"n_jobs":num_cores*2})
         self.current_library = library
 
         self.current_data_mean = pd.read_csv(current_data_mean_path, index_col=0).iloc[:,0]
@@ -104,7 +111,7 @@ class Pebble_Model():
         self.current_target_std = pd.read_csv(current_target_std_path, index_col=0).iloc[:,0]
 
 
-    def load_burnup_model(self, burnup_model_path,
+    def load_burnup_model(self, burnup_model_path, num_cores,
                  burnup_data_mean_path = None,
                  burnup_data_std_path = None,
                  burnup_target_mean_path = None,
@@ -121,6 +128,8 @@ class Pebble_Model():
 
         with open(burnup_model_path, 'rb') as f:
             self.burnup_model = pickle.loads(f.read())
+        if library == "sklearn":
+            self.burnup_model.set_params(**{"n_jobs":num_cores*2})
         self.burnup_library = library
 
         self.burnup_data_mean = pd.read_csv(burnup_data_mean_path, index_col=0).iloc[:,0]
@@ -142,36 +151,29 @@ class Pebble_Model():
         pebbles_modeled_by_zone = {}
         pebbles_removed_by_zone = {}
 
-        # Initialize arrays for ML input dataframes
-        radius_array = np.zeros(num_pebbles)
-        height_array = np.zeros(num_pebbles)
-        cs137_array = np.zeros(num_pebbles)
-        xe135_array = np.zeros(num_pebbles)
-        isfuel_array = np.ones(num_pebbles)
-
-        conc_array = [None]*num_pebbles
         depletion_time_array = np.full(num_pebbles, burn_step_day)
-        
-        discharge_data_index = 0
-        discharge_data = {}
-        discard_data_index = 0
-        discard_data = {}
-
-        for sub_step in range(num_substeps):
-            self.discharge_indices = []
-            self.discard_indices = []
+        for sub_step in range(1,1+num_substeps):
+            if debug > 0:
+                print(f"Performing substep {sub_step}.")
+            # Initialize arrays for ML input dataframes
+            radius_array = np.zeros(num_pebbles)
+            height_array = np.zeros(num_pebbles)
+            cs137_array = np.zeros(num_pebbles)
+            xe135_array = np.zeros(num_pebbles)
+            isfuel_array = np.ones(num_pebbles)
+            #u235_array = np.zeros(num_pebbles)
+            
+            conc_array = [None]*num_pebbles
+            
+            discharge_data_index = 0
+            discharge_data = {}
+            discard_data_index = 0
+            discard_data = {}
             for p in range(num_pebbles):
                 peb = self.pebbles[p]
-
-                # Get the velocity for the pebble and update its location
-                vz = self.get_velocity(peb.z, peb.r)
-                peb.z = peb.z + vz*time_step
-
                 radius_array[p] = peb.r
                 height_array[p] = peb.z
-                if peb.z > self.max_z:
-                    self.discharge_indices += [p]
-                    peb.in_core = False
+                peb.last_x, peb.last_y, peb.last_r, peb.last_z = peb.x, peb.y, peb.r, peb.z
                 concentrations = peb.material.concentrations
                 conc_array[p] = concentrations
                 if "55137<lib>" in concentrations.keys():
@@ -182,6 +184,7 @@ class Pebble_Model():
                     xe135_array[p] = peb.material.concentrations['54135<lib>']
                 else:
                     xe135_array[p] = 0
+                #u235_array[p] = peb.material.concentrations['92235<lib>']
 
             # Put together df for current ML model to use and predict
             if debug > 0:
@@ -191,8 +194,13 @@ class Pebble_Model():
                                       "cs137": cs137_array,
                                       "xe135": xe135_array,
                                       "is_fuel": isfuel_array})
-            core_flux = core_flux.iloc[core_flux.index.repeat(len(current_df))].reset_index(drop=True)
-            current_df = pd.concat([current_df,core_flux], axis=1)
+            del(radius_array)
+            del(height_array)
+            del(cs137_array)
+            del(xe135_array)
+            del(isfuel_array)
+            core_flux_df = core_flux.iloc[core_flux.index.repeat(len(current_df))].reset_index(drop=True)
+            current_df = pd.concat([current_df,core_flux_df], axis=1)
             if debug > 0:
                 print("Standardizing current dataframe...")
             current_df, _, _ = standardize(current_df,
@@ -205,6 +213,7 @@ class Pebble_Model():
                 predicted_currents = pd.DataFrame(predicted_currents, columns=self.current_target_mean.axes[0].tolist())
             else:
                 predicted_currents = self.current_model.predict(current_df)
+            del(current_df)
              
             predicted_currents = unstandardize(predicted_currents,
                                                self.current_target_mean,
@@ -224,60 +233,88 @@ class Pebble_Model():
             burnup_df_log = burnup_df.apply(lambda x: np.log10(x + 1))
             burnup_df_log['power'] = burnup_df['power']
             burnup_df_log['depletion_time'] = burnup_df['depletion_time']
+            del(burnup_df)
             burnup_df_stan, _, _ = standardize(burnup_df_log, 
                                           self.burnup_data_mean,
                                           self.burnup_data_std)
+            del(burnup_df_log)
             if debug > 0:
                 print("Predicting concentration changes from burnup...")
             if self.burnup_library == "sklearn":
                 predicted_conc_stan = self.burnup_model.predict(burnup_df_stan)
                 predicted_conc_stan = pd.DataFrame(predicted_conc_stan, columns=self.burnup_target_mean.axes[0].tolist())
             else:
-                predicted_conc_stan = self.burnup_model.predict(burnup_df)
+                predicted_conc_stan = self.burnup_model.predict(predicted_conc_stan)
+            del(burnup_df_stan)
             predicted_conc_log = unstandardize(predicted_conc_stan,
                                            self.burnup_target_mean,
                                            self.burnup_target_std)
             predicted_conc = predicted_conc_log.apply(lambda x:10**(x)-1)
-
+            del(predicted_conc_log)
+            
             if debug > 0:
                 print("Updating fuel pebble concentrations...")
             for p in range(num_pebbles):
                 peb = self.pebbles[p] 
                 if peb.in_core and peb.is_fuel:
                     peb.material.concentrations = predicted_conc.iloc[p].to_dict()
+            del(predicted_conc)
+
+            # After the burnup, move the pebbles
+            for p in range(num_pebbles):
+                peb = self.pebbles[p] 
+                vz = self.get_velocity(peb.z, peb.r)
+                peb.z = peb.z + vz*time_step
+                if debug > 2:
+                    print(f"Moving pebble {p} from x={peb.last_x},y={peb.last_y},z={peb.last_z} to x={peb.x},y={peb.y},z={peb.z}") 
+
+                if peb.z > self.max_z:
+                    if debug > 1:
+                        print(f"Flagged discharge pebble {p}: Movement from {peb.last_z} to {peb.z}")
+                    self.discharge_indices += [p]
+                    peb.in_core = False
 
             if debug > 0:
-                print("Removing pebbles above threshold...")
+                print("Removing pebbles above threshold from top zone...")
             pebbles_modeled_by_zone, pebbles_removed_by_zone = self.remove_spent_pebbles(threshold,
                                                                                          pebbles_modeled_by_zone,
                                                                                          pebbles_removed_by_zone,
                                                                                          True)
-
             if debug > 0:
                 print("Writing discharged and discarded pebble data...")
+                
             for p in self.discharge_indices:
                 peb = self.pebbles[p]
+                # Skip graphite pebbles.
+                if not peb.is_fuel:
+                    continue
                 if p in self.discard_indices:
                     discard_data[discard_data_index] = {
                         "features": {
-                            "radius": peb.r
+                            "radius": peb.r,
+                            "id": p,
+                            "pass": peb.pass_num
                         },
                         "concentration": peb.material.concentrations
                     }
                     discard_data_index += 1
-                else:
-                    discharge_data[discharge_data_index] = {
-                        "features": {
-                            "radius": peb.r
-                        },
-                        "concentration": peb.material.concentrations
-                    }
-                    discharge_data_index += 1
+
+                discharge_data[discharge_data_index] = {
+                    "features": {
+                        "radius": peb.r,
+                        "id": p,
+                        "pass": peb.pass_num
+                    },
+                    "concentration": peb.material.concentrations
+                }
+                discharge_data_index += 1
 
             with open(f"discharge_pebbles_{iteration}_{sub_step}.json", 'w') as file:
                 json.dump(discharge_data, file, indent=2)
             with open(f"discard_pebbles_{iteration}_{sub_step}.json", 'w') as file:
                 json.dump(discard_data, file, indent=2)
+            del(discharge_data)
+            del(discard_data)
 
             # Reinsert non-discarded pebbles and replace discarded pebbles with fresh ones, all at the bottom
             self.reinsert_pebbles(insertion_ratios, time_step, debug)
@@ -292,8 +329,8 @@ class Pebble_Model():
         return removal_fractions
 
     def initialize_pebbles(self, num_pebbles, pebble_points, initial_inventory, debug=0):
-        self.pebbles = [None]*num_pebbles
-        indices = random.choices(range(len(pebble_points)), k=num_pebbles)
+        self.pebbles = [None for _ in range(num_pebbles)]
+        indices = np.random.choice(range(len(pebble_points)), size=num_pebbles, replace=False)
         x_vals = pebble_points.iloc[indices]['x'].values
         y_vals = pebble_points.iloc[indices]['y'].values
         z_vals = pebble_points.iloc[indices]['z'].values
@@ -304,7 +341,8 @@ class Pebble_Model():
             y = y_vals[i]
             z = z_vals[i]
             mat_name = random.choices(list(initial_inventory.keys()), weights=initial_inventory.values(), k=1)[0]
-            print(f"Generating {mat_name} pebble at x = {x}, y = {y}, z = {z}")
+            if debug > 1:
+                print(f"Generating {mat_name} pebble at x = {x}, y = {y}, z = {z}")
             self.pebbles[i] = Pebble(x, y, z, self.fresh_materials[mat_name].concentrations.copy())
 
 
@@ -317,32 +355,29 @@ class Pebble_Model():
         :return:
         """
         self.discarded_indices = []
-        self.reinsert_indices = []
-        for i in range(len(self.pebbles)):
-            pebble = self.pebbles[i]
-            rad_zone, axial_zone = get_zone(pebble.r, pebble.z, self.radial_bound_points, self.axial_zone_bounds)
+        for p in self.discharge_indices:
+            peb = self.pebbles[p]
+            # Get the previous zone of the freshly discharged pebble
+            rad_zone, axial_zone = get_zone(peb.r, peb.last_z, self.radial_bound_points, self.axial_zone_bounds)
 
-            # Check if the pebble is in a top-most zone
-            if axial_zone == len(self.axial_zone_bounds[rad_zone-1])-1:
-                zone_material_name = f"{pebble.intial_fuel}_R{rad_zone}Z{axial_zone}P{pebble.pass_num}"
-                pebbles_modeled_by_zone[zone_material_name] = \
-                    1+pebbles_modeled_by_zone.get(zone_material_name, 0)
+            # Relate this pebble to its corresponding zone material
+            zone_material_name = f"{peb.intial_fuel}_R{rad_zone}Z{axial_zone}P{peb.pass_num}"
+            pebbles_modeled_by_zone[zone_material_name] = \
+                1+pebbles_modeled_by_zone.get(zone_material_name, 0)
 
-                # Check if pebble's cesium concentration is above threshold
-                if pebble.material.concentrations.get("55137<lib>", 0) > threshold:
-                    pebbles_removed_by_zone[zone_material_name] = \
-                        1 + pebbles_removed_by_zone.get(zone_material_name, 0)
-                    self.discard_indices += [i]
+            # Check if pebble's cesium concentration is above threshold
+            # If so, mark it for discard and count it for the zone model
+            if peb.material.concentrations.get("55137<lib>", 0) > threshold:
+                pebbles_removed_by_zone[zone_material_name] = \
+                    1 + pebbles_removed_by_zone.get(zone_material_name, 0)
+                self.discard_indices += [p]
 
-                # Check to see if its a graphite pebble and if it should be removed
-                elif graphite_removal_flag and "pebgraph" in pebble.material.name:
-                    pebbles_removed_by_zone[zone_material_name] = \
-                        1 + pebbles_removed_by_zone.get(zone_material_name, 0)
-
-                    self.discard_indices += [i]
-                # Otherwise reinsert the pebble
-                else:
-                    self.reinsert_indices += [i]
+            # Check to see if the pebble is graphite and remove it without tracking it
+            elif not peb.is_fuel:
+                self.discard_indices += [p]
+            # Otherwise mark the pebble to be reinserted
+            else:
+                self.reinsert_indices += [p]
         return pebbles_removed_by_zone, pebbles_modeled_by_zone
 
     def reinsert_pebbles(self, insertion_ratios, time_step, debug):
@@ -353,6 +388,8 @@ class Pebble_Model():
             peb.z = np.random.uniform(0,1)*vz * time_step
             if debug > 1:
                 print(f"Reinserting pebble {peb.id} at x = {peb.x}, y = {peb.y}, z = {peb.z} (pass {peb.pass_num})")
+        self.reinsert_indices = []
+        self.discharge_indices = []
         for i in self.discard_indices:
             x,y,z = self.insertion_distribution(1)
             mat_name = random.choices(list(insertion_ratios.keys()), weights=insertion_ratios.values(), k=1)[0]
@@ -361,7 +398,9 @@ class Pebble_Model():
             vz = self.get_velocity(0, peb.r)
             self.pebbles[i].z = np.random.uniform(0, 1) * vz * time_step
             if debug > 1:
-                print(f"Generating {material.name} pebble at x = {x}, y = {y}, z = {self.pebbles[i].z}")
+                print(f"Regenerating discarded pebble {peb.id} as {material.name} at x = {x}, y = {y}, z = {self.pebbles[i].z}")
+        self.discard_indices = []
+
 
 def gFHR_insertion_distribution(num_pebbles):
     if num_pebbles > 1:
@@ -369,11 +408,11 @@ def gFHR_insertion_distribution(num_pebbles):
         r_vals = np.random.uniform(low=0, high=118, size=num_pebbles)
         x_vals = r_vals * np.cos(angles)
         y_vals = r_vals * np.sin(angles)
-        z_vals = np.zeros(num_pebbles)
+        z_vals = np.full(num_pebbles, 60)
     else:
         angle = np.random.uniform(low=0, high=2 * np.pi, size=num_pebbles)[0]
         r_val = np.random.uniform(low=0, high=118, size=num_pebbles)[0]
         x_vals = r_val * np.cos(angle)
         y_vals = r_val * np.sin(angle)
-        z_vals = np.zeros(num_pebbles)[0]
+        z_vals = np.full(num_pebbles, 60)[0]
     return x_vals, y_vals, z_vals

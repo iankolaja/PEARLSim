@@ -19,7 +19,7 @@ class Simulation():
         self.days = 0
         self.burnup_time_step = 6.525 # days
         self.cs_discharge_threshold = 1
-        self.pebble_model = None
+        self.pebble_model = Pebble_Model()
         self.debug = 0
         self.serpent_settings = {"pop": "10000 50 25"}
     def read_input_file(self, input_file, directory_name=None):
@@ -100,21 +100,20 @@ class Simulation():
         if keyword == "define_zones":
             file_path = line[1].replace("\n", "")
             pebble_path = line[2].replace("\n", "")
-            try:
-                self.core.define_zones("../"+file_path, "../"+pebble_path, debug=self.debug)
-                self.pebble_model.radial_bound_points = self.core.radial_bound_points
-                self.pebble_model.axial_zone_bounds = self.core.axial_zone_bounds
-            except:
-                print(f"Failed to define zones from {file_path}. Is the file valid?")
+            #try:
+            self.core.define_zones("../"+file_path, "../"+pebble_path, debug=self.debug)
+            self.pebble_model.radial_bound_points = self.core.radial_bound_points
+            self.pebble_model.axial_zone_bounds = self.core.axial_zone_bounds
+            #except:
+            #    print(f"Failed to define zones from {file_path}. Is the file valid?")
 
         if keyword == "load_pebble_model":
             current_model_path = "../" + line[1]
             burnup_model_path = "../" + line[2].replace("\n","")
-            self.pebble_model = Pebble_Model()
             print(f"Loading current model from {current_model_path}")
-            self.pebble_model.load_current_model(current_model_path)
+            self.pebble_model.load_current_model(current_model_path, self.cpu_cores)
             print(f"Loading burnup model from {burnup_model_path}")
-            self.pebble_model.load_burnup_model(burnup_model_path)
+            self.pebble_model.load_burnup_model(burnup_model_path, self.cpu_cores)
 
         if keyword == "load_velocity_profile":
             file_path = line[1].replace("\n","")
@@ -204,15 +203,21 @@ class Simulation():
             num_steps = int(line[1])
             num_substeps = int(line[2])
             starting_step = int(line[3])
-            insertion_ratios = get_insertion_ratio_pairs(line[4:])
+            fuel_ratios = line[4:]
+            num_definitions = int(len(fuel_ratios)/2)
+            insertion_ratios = {}
+            for i in range(num_definitions):
+                insertion_ratios[fuel_ratios[i*2]] = float(fuel_ratios[i*2+1])
+                
             for i in range(starting_step, num_steps+1):
                 print(f"Simulating pebbles (Step {i})")
-                core_flux_map, core_flux_avg_unc = read_core_flux(f"gFHR_core_{i}.serpent_det0.m")
+                core_flux_map, core_flux_avg_unc = read_core_flux(f"{self.simulation_name}_{i}.serpent_det0.m")
                 self.pebble_model.update_model(i, self.burnup_time_step, num_substeps, core_flux_map,
                                                insertion_ratios, self.cs_discharge_threshold, self.debug)
 
         if keyword == "generate_training_data":
             step = int(line[1])
+            self.core.iteration = step
             num_training_data = int(line[2])
             self.load_from_step(step, 0)
             print(f"Generating {num_training_data} points of training data from step {step}.")
@@ -258,9 +263,14 @@ class Simulation():
                 self.serpent_settings[setting] = value
 
     def load_from_step(self, load_iteration, burnup_step):
-        self.core.update_from_bumat(self.debug, iteration=load_iteration, step=burnup_step)
         self.core.load_zone_maps(f"zone_map{load_iteration}.json")
         self.core.load_pebble_locations(f"pebble_positions_{load_iteration}.csv", debug=self.debug)
+        for r in range(len(self.core.zones)):
+            for zone in self.core.zones[r]:
+                zone.initialize({"graphpeb":1}, debug=self.debug)
+        print(self.core.materials.keys())
+        self.core.update_from_bumat(self.debug, iteration=load_iteration, step=burnup_step)
+        print(self.core.materials.keys())
 
     def run_serpent(self, input_name):
         if self.num_nodes > 1:

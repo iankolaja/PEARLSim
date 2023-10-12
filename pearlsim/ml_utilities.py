@@ -6,6 +6,8 @@ from pearlsim.material import get_cross_section_string
 ENERGY_BINS = np.array([1e-11, 5.8e-08, 1.4e-07, 2.8e-07, 6.25e-07, 9.72e-07, 1.15e-06,
                         1.855e-06, 4e-06, 9.877e-06, 1.5968e-05, 0.000148728, 0.00553,
                         0.009118, 0.111, 0.5, 0.821, 2.231, 10])
+RADIUS_BINS = np.array([0.00000E+00, 3.00000E+01, 6.00000E+01, 9.00000E+01, 1.20000E+02])
+HEIGHT_BINS = np.array([4.92000E+02, 4.42800E+02, 3.93600E+02, 3.44400E+02, 2.95200E+02, 2.46000E+02, 1.96800E+02, 1.47600E+02, 9.84000E+01, 4.92000E+01, 0.00000E+00])
 ENERGY_CENTERS = (ENERGY_BINS[1:] + ENERGY_BINS[:-1])/2
 
 
@@ -115,5 +117,5 @@ def standardize(raw_data, mean=None, std=None, axis=0):
     return result, mean, std
 
 def unstandardize(standardized_data, mean, std):
-    raw_data = (standardized_data*std)+mean
+    raw_data = (standardized_data*std.values)+mean.values
     return raw_data

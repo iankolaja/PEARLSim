@@ -48,7 +48,7 @@ class Core():
         self.num_top_zone_pebbles = 0
         self.materials = {}
         self.fresh_pebbles = {}
-        self.pebble_locations = pd.DataFrame([], columns=["x","y","z","r","zone_r","zone_z"])
+        self.pebble_locations = pd.DataFrame([], columns=["x","y","z","r","zone_r","zone_z","material"])
         self.core_geometry = ""
         self.discharge_inventory = Out_Of_Core_Bin()
         self.reinsert_inventory = Out_Of_Core_Bin()
@@ -86,14 +86,17 @@ class Core():
             self.zones += [[]]
             for z in range(self.num_z[-1]):
                 self.zones[r] += [Zone(1, r+1, z+1)]
-        pebble_locations = self.load_pebble_locations(pebble_file, debug)
+        self.load_pebble_locations(pebble_file, debug)
         for r in range(self.num_r):
             self.num_z += [len(self.axial_zone_bounds[r])+1]
             self.num_top_zone_pebbles += len(self.zones[r][-1].pebble_locations)
-        self.pebble_locations = pd.DataFrame(pebble_locations, columns=["x","y","z","r","zone_r","zone_z"])
 
     def load_pebble_locations(self, pebble_file, debug):
         pebble_locations = []
+        if type(self.zones[0][0].pebble_locations) == list:
+            loading_zone_locations = True
+        else:
+            loading_zone_locations = False
         with open(pebble_file, 'r') as pebble_f:
             for line in pebble_f:
                 line = line.split()
@@ -101,12 +104,14 @@ class Core():
                 y = float(line[1])
                 z = float(line[2])
                 r = np.sqrt(x**2+y**2)
+                material = line[4][1:].replace("\n","")
                 zone_r, zone_z = get_zone(r, z, self.radial_bound_points, self.axial_zone_bounds)
                 if debug >= 2:
                     print(f"Pebble at {x},{y},{z} (r={r} placed in zone R{zone_r+1}Z{zone_z+1}")
-                self.zones[zone_r][zone_z].pebble_locations += [(x, y, z, r)]
-                pebble_locations += [(x,y,z,r,zone_r,zone_z)]
-        return pebble_locations
+                if loading_zone_locations:
+                    self.zones[zone_r][zone_z].pebble_locations += [(x, y, z, r)]
+                pebble_locations += [(x,y,z,r,zone_r,zone_z,material)]
+        self.pebble_locations = pd.DataFrame(pebble_locations, columns=["x","y","z","r","zone_r","zone_z","material"])
 
     def rename_materials(self, rename_map):
         for key in rename_map.keys():
@@ -163,10 +168,12 @@ class Core():
 
         if debug >= 1:
             print(f"Removing spent pebbles from discrete model...")
-        removal_fractions, removed_pebbles = pebble_model.remove_spent_pebbles(self.radial_bound_points,
-                                                                               self.axial_zone_bounds,
-                                                                               threshold,
-                                                                               self.always_remove_graphite)
+        removal_fractions = {}
+        removed_pebbles = 0
+        #removal_fractions, removed_pebbles = pebble_model.remove_spent_pebbles(threshold,
+        #                                                                       removal_fractions,
+        #                                                                       removed_pebbles,
+        #                                                                       self.always_remove_graphite)
         if debug >= 1:
             print(f"Removing spent pebbles from top zones...")
         removed_pebbles = self.discharge_inventory.remove_fractions(removal_fractions, self.always_remove_graphite)
@@ -262,8 +269,11 @@ class Core():
             f.write(pebble_text)
         return assigned_pebbles
 
-    def generate_pebble_detectors(self, num_detectors, assigned_pebbles):
-        pebble_ids = np.random.choice(len(assigned_pebbles), num_detectors, replace=False)
+    def generate_pebble_detectors(self, num_detectors):
+        print(self.pebble_locations)
+        fuel_pebbles = self.pebble_locations[self.pebble_locations['material'].str.contains("fuel")]
+        print(fuel_pebbles)
+        pebble_ids = np.random.choice(len(fuel_pebbles), num_detectors, replace=False)
         detector_text = ""
         detector_id = 0
 
@@ -272,39 +282,31 @@ class Core():
         cs137_array = []
         xe135_array = []
         u235_array = []
-        fuel_flag_array = []
 
         for i in pebble_ids:
             detector_id += 1
-            data = assigned_pebbles.iloc[i]
+            data = fuel_pebbles.iloc[i]
             mat_name = data['material']
             detector_text += f"surf peb{detector_id}_s sph {data['x']} {data['y']} {data['z']} {self.pebble_radius}\n"
             temperature_array += [self.materials[mat_name].temperature]
-            if "fuel" in mat_name:
-                fuel_flag_array += [1]
-                if "55137<lib>" in self.materials[mat_name].concentrations.keys():
-                    cs137_array += [self.materials[mat_name].concentrations['55137<lib>']]
-                else:
-                    cs137_array += [0]
-                if "92235<lib>" in self.materials[mat_name].concentrations.keys():
-                    u235_array += [self.materials[mat_name].concentrations['92235<lib>']]
-                else:
-                    cs137_array += [0]
-                if '54135<lib>' in self.materials[mat_name].concentrations.keys():
-                    xe135_array += [self.materials[mat_name].concentrations['54135<lib>']]
-                else:
-                    xe135_array += [0]
+            if "55137<lib>" in self.materials[mat_name].concentrations.keys():
+                cs137_array += [self.materials[mat_name].concentrations['55137<lib>']]
             else:
-                fuel_flag_array += [0]
                 cs137_array += [0]
+            if "92235<lib>" in self.materials[mat_name].concentrations.keys():
+                u235_array += [self.materials[mat_name].concentrations['92235<lib>']]
+            else:
+                cs137_array += [0]
+            if '54135<lib>' in self.materials[mat_name].concentrations.keys():
+                xe135_array += [self.materials[mat_name].concentrations['54135<lib>']]
+            else:
                 xe135_array += [0]
-                u235_array += [0]
 
             detector_text += f"det peb_{i}_{round(data['x'],4)}_{round(data['y'],4)}_{round(data['z'],4)}_ ds peb{detector_id}_s -1 de standard_grid\n"
 
         auxiliary_features = pd.DataFrame({"cs137": cs137_array,
                                            "xe135": xe135_array,
-                                           "is_fuel": fuel_flag_array})
+                                           "u235": u235_array})
         auxiliary_features.to_csv(f"current_auxiliary_features{self.iteration}.csv")
         return detector_text
 
@@ -327,7 +329,8 @@ class Core():
 
         input_str += "\n\n%%%%%%%% Pebble Universe Definition \n\n"
         peb_file_name = f"pebble_positions_{self.iteration}.csv"
-        assigned_pebbles = self.generate_pebble_locations(peb_file_name)
+        if num_training_data == 0:
+            self.generate_pebble_locations(peb_file_name)
         if num_training_data > 0:
             input_str += f"pbed u_pb u_flibe \"{peb_file_name}\"  pow\n"
         else:
@@ -348,7 +351,7 @@ class Core():
 
         if num_training_data > 0:
             input_str += "\n\n%%%%%%%% Pebble Current Detectors for ML model \n\n"
-            detector_str = self.generate_pebble_detectors(num_training_data, assigned_pebbles)
+            detector_str = self.generate_pebble_detectors(num_training_data)
             input_str += detector_str
 
         if num_training_data > 0:
@@ -381,8 +384,8 @@ class Core():
 
     def update_from_bumat(self, debug, iteration=None, step=1):
         if iteration is None:
-            load_iteration = self.iteration
-        bumat_name = f"{self.simulation_name}_{load_iteration}.serpent.bumat{step}"
+            iteration = self.iteration
+        bumat_name = f"{self.simulation_name}_{iteration}.serpent.bumat{step}"
         if debug > 0:
             print(f"Reading {bumat_name}")
         with open(bumat_name, 'r') as f:
@@ -396,7 +399,10 @@ class Core():
                     if not first_mat:
                         if debug > 0:
                             print(f"Updating {current_mat_name}")
-                        self.materials[current_mat_name].concentrations = current_conc
+                        if current_mat_name in self.materials.keys():
+                            self.materials[current_mat_name].concentrations = current_conc
+                        else:
+                            self.materials[current_mat_name] = Material(current_mat_name, current_conc)
                     current_mat_name = line[1].split("pp")[0]
                     current_conc = {}
                     reading = True
@@ -409,6 +415,11 @@ class Core():
                         nuclide = id[0]
                     amount = float(line[1].replace("\n",""))
                     current_conc[nuclide] = amount
+        # Handles the last-read material block
+        # TODO: Make this block obselete or make these 6 lines of code a function
         if debug > 0:
             print(f"Updating {current_mat_name}")
-        self.materials[current_mat_name].concentrations = current_conc
+        if current_mat_name in self.materials.keys():
+            self.materials[current_mat_name].concentrations = current_conc
+        else:
+            self.materials[current_mat_name] = Material(current_mat_name, current_conc)

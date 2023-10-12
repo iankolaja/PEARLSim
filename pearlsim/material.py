@@ -57,6 +57,9 @@ class Material():
         if type(source) == dict:
             self.concentrations = source
             self.density = "sum fix"
+        if type(source) == Material:
+            self.concentrations = deepcopy(source.concentrations)
+            self.density = source.density
         self.name = name
         self.pass_num = pass_num
         self.rgb = rgb
@@ -84,7 +87,7 @@ class Material():
         return new_material
 
 
-    def write_input(self, triso_counter, static_fuel_mats, debug):
+    def write_input(self, triso_counter, static_fuel_mats, debug, volume=None, never_burn=False):
         self.cross_section_str = get_cross_section_string(self.temperature)
         if self.density == "sum fix":
             density_s = f"sum fix {self.cross_section_str[1:]} {round(self.temperature,3)}"
@@ -95,11 +98,16 @@ class Material():
         input_s = f"mat {self.name} {density_s} rgb {self.rgb[0]} {self.rgb[1]} {self.rgb[2]}  tmp {round(self.temperature,3)}"
         if "graph" in self.name:
             input_s += " moder  grph 6000\n"
+        elif volume is not None and not never_burn:
+            input_s += f" burn 1 vol {volume}\n"
+        elif volume is not None:
+            input_s += f" vol {volume}\n"
         else:
             input_s += " burn 1 \n"
         for key in self.concentrations.keys():
-            conc_str = f"  {key}    {self.concentrations[key]}\n".replace("<lib>", self.cross_section_str)
-            input_s += conc_str
+            if self.concentrations[key] > 0:
+                conc_str = f"  {key}    {self.concentrations[key]}\n".replace("<lib>", self.cross_section_str)
+                input_s += conc_str
         input_s += "\n"
 
         if "fuel" in self.name:

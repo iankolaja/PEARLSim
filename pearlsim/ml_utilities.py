@@ -11,7 +11,7 @@ HEIGHT_BINS = np.array([4.92000E+02, 4.42800E+02, 3.93600E+02, 3.44400E+02, 2.95
 ENERGY_CENTERS = (ENERGY_BINS[1:] + ENERGY_BINS[:-1])/2
 
 
-def read_det_file(file_name):
+def read_det_file(file_name, normalize_and_label=False):
     reading=False
     energy_centers = ENERGY_CENTERS
     skip_names = ["E", "PHI", "Z", "R"]
@@ -51,7 +51,32 @@ def read_det_file(file_name):
     pebble_flux_matrix = np.array(pebble_flux_matrix)
     features = pd.DataFrame({"x": x_array, "y": y_array, "z": z_array })
     num_detectors = len(features)
-    core_flux_headers = ["bin" + str(n) for n in range(1, 1 + len(core_flux))]
+    if normalize_and_label:
+        core_flux_headers = []
+        num_radius_bins = len(RADIUS_BINS)-1
+        num_height_bins = len(HEIGHT_BINS)-1
+        num_energy_bins = len(ENERGY_BINS)-1
+        bin_e = 0
+        bin_r = -1
+        bin_z = 0
+        for i in range(len(core_flux)):
+            if bin_r == num_radius_bins-1:
+                bin_r = 0
+                if bin_z == num_height_bins-1:
+                    bin_z = 0
+                    bin_e += 1
+                else:
+                    bin_z += 1
+            else:
+                bin_r += 1
+            # Calculate volume of a washer, noting that height bins are in descending
+            # order while radius bins are increasing
+            volume = np.pi*(RADIUS_BINS[bin_r+1]**2-RADIUS_BINS[bin_r]**2)*(HEIGHT_BINS[bin_z]-HEIGHT_BINS[bin_z+1])
+            energy_width = ENERGY_BINS[bin_e+1]-ENERGY_BINS[bin_e]
+            core_flux[i] = core_flux[i]/volume/energy_width
+            core_flux_headers += [f"binR{bin_r+1}Z{bin_z+1}E{bin_e+1}"]
+    else:
+        core_flux_headers = ["bin" + str(n) for n in range(1, 1 + len(core_flux))]
     features = pd.concat([features, pd.DataFrame([core_flux]*num_detectors,
                           columns=core_flux_headers)], axis=1)
     targets = pd.DataFrame(pebble_flux_matrix, columns=energy_centers)
@@ -59,8 +84,11 @@ def read_det_file(file_name):
     return features, targets, id_array, avg_uncertainty
 
 
-def extract_from_bumat(file_path):
-    concentrations = []
+def extract_from_bumat(file_path, return_list = True):
+    if return_list:
+        concentrations = []
+    else:
+        concentrations = {}
     with open(file_path, 'r') as f:
         reading = False
         first_mat = True
@@ -70,7 +98,10 @@ def extract_from_bumat(file_path):
                 continue
             if line[0] == "mat":
                 if not first_mat:
-                    concentrations += [current_conc]
+                    if return_list:
+                        concentrations += [current_conc]
+                    else:
+                        concentrations[current_mat_name] = current_conc
                 current_mat_name = line[1].split("pp")[0]
                 current_conc = {}
                 reading = True
@@ -83,7 +114,10 @@ def extract_from_bumat(file_path):
                     nuclide = id[0]
                 amount = float(line[1].replace("\n", ""))
                 current_conc[nuclide] = amount
-    concentrations += [current_conc]
+    if return_list:
+        concentrations += [current_conc]
+    else:
+        concentrations[current_mat_name] = current_conc
     return concentrations
 
 def generate_pebble_burnup_model(template_path, surface_current, power, concentrations, temp, time):

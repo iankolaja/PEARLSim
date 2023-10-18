@@ -42,8 +42,8 @@ def read_core_flux(file_name, normalize_and_label=False):
             # Calculate volume of a washer, noting that height bins are in descending
             # order while radius bins are increasing
             volume = np.pi*(RADIUS_BINS[bin_r+1]**2-RADIUS_BINS[bin_r]**2)*(HEIGHT_BINS[bin_z]-HEIGHT_BINS[bin_z+1])
-            energy_width = ENERGY_BINS[bin_e+1]-ENERGY_BINS[bin_e+1]
-            core_flux.iloc[i] = core_flux.iloc[i]/volume/energy_width
+            energy_width = ENERGY_BINS[bin_e+1]-ENERGY_BINS[bin_e]
+            core_flux[i] = core_flux[i]/volume/energy_width
             core_flux_headers += [f"binR{bin_r+1}Z{bin_z+1}E{bin_e+1}"]
     else:
         core_flux_headers = ["bin" + str(n) for n in range(1, 1 + len(core_flux))]

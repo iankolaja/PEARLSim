@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
-from .ml_utilities import ENERGY_BINS, RADIUS_BINS, HEIGHT_BINS
+import json
+from .ml_utilities import ENERGY_BINS, RADIUS_BINS, HEIGHT_BINS, extract_from_bumat
 
 def read_core_flux(file_name, normalize_and_label=False):
     reading=False
@@ -68,6 +69,11 @@ def read_res_file(file_name, parameter, burnup_step=2, sub_index=0):
     value = float(result.split()[1+sub_index*2])
     unc = float(result.split()[2+sub_index*2])
     return value, unc
+
+#def compute_average_distributions(bumat_file_name, zone_file_name, discharge_file_name, isotope, 
+#                                  top_zones, fuel_name="fuel20", num_passes=8):
+#    concentrations = extract_from_bumat(bumat_file_name, return_list=False)
+
         
         
         

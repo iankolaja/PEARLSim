@@ -1,6 +1,7 @@
 import numpy as np
 import pandas as pd
-from .ml_utilities import ENERGY_BINS, RADIUS_BINS, HEIGHT_BINS
+import json
+from .ml_utilities import ENERGY_BINS, RADIUS_BINS, HEIGHT_BINS, extract_from_bumat
 
 def read_core_flux(file_name, normalize_and_label=False):
     reading=False
@@ -42,8 +43,8 @@ def read_core_flux(file_name, normalize_and_label=False):
             # Calculate volume of a washer, noting that height bins are in descending
             # order while radius bins are increasing
             volume = np.pi*(RADIUS_BINS[bin_r+1]**2-RADIUS_BINS[bin_r]**2)*(HEIGHT_BINS[bin_z]-HEIGHT_BINS[bin_z+1])
-            energy_width = ENERGY_BINS[bin_e+1]-ENERGY_BINS[bin_e+1]
-            core_flux.iloc[i] = core_flux.iloc[i]/volume/energy_width
+            energy_width = ENERGY_BINS[bin_e+1]-ENERGY_BINS[bin_e]
+            core_flux[i] = core_flux[i]/volume/energy_width
             core_flux_headers += [f"binR{bin_r+1}Z{bin_z+1}E{bin_e+1}"]
     else:
         core_flux_headers = ["bin" + str(n) for n in range(1, 1 + len(core_flux))]
@@ -68,6 +69,11 @@ def read_res_file(file_name, parameter, burnup_step=2, sub_index=0):
     value = float(result.split()[1+sub_index*2])
     unc = float(result.split()[2+sub_index*2])
     return value, unc
+
+#def compute_average_distributions(bumat_file_name, zone_file_name, discharge_file_name, isotope, 
+#                                  top_zones, fuel_name="fuel20", num_passes=8):
+#    concentrations = extract_from_bumat(bumat_file_name, return_list=False)
+
         
         
         

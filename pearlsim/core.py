@@ -135,10 +135,11 @@ class Core():
 
         if debug >= 1:
             print("Clearing discharge inventory...")
-
-        self.reinsert_inventory = deepcopy(self.discharge_inventory)
-        rename_map = self.reinsert_inventory.increment_pass()
+            
+        self.reinsert_inventory, rename_map = self.discharge_inventory.to_reinsert()
         self.rename_materials(rename_map)
+
+            
         if self.reinsert_inventory.num_pebbles > 0:
             reinsert_fracs = dict(zip(self.reinsert_inventory.inventory.keys(),
                                       map(lambda x: x / self.num_top_zone_pebbles,
@@ -188,18 +189,8 @@ class Core():
         self.volume_average_by_pass(self.discharge_inventory)
 
         if debug >= 1:
-            print(f"Removing spend pebbles from top zones...")
+            print(f"Inserting pebbles at bottom of core...")
         for r_zone in range(num_radial_channels):
-            # How many discharge pebbles belong to this bottom zone
-            #fraction_in_zone = self.zones[r_zone][0].num_pebbles / num_bottom_zone_pebbles
-            #print(fraction_in_zone)
-            #reinsert_fracs = {}
-            #for key in self.reinsert_inventory.inventory.keys():
-            #    #
-            #    reinsert_fracs[key] = self.reinsert_inventory.inventory[key]*fraction_in_zone/self.reinsert_inventory.num_pebbles
-            #print(reinsert_fracs)
-            #print("\n\n\n")
-            #print(insert_pebbles)
             rename_map = self.zones[r_zone][0].insert(insert_pebbles, reinsert_fracs)
             self.rename_materials(rename_map)
         if debug > 0:
@@ -270,9 +261,7 @@ class Core():
         return assigned_pebbles
 
     def generate_pebble_detectors(self, num_detectors):
-        print(self.pebble_locations)
         fuel_pebbles = self.pebble_locations[self.pebble_locations['material'].str.contains("fuel")]
-        print(fuel_pebbles)
         pebble_ids = np.random.choice(len(fuel_pebbles), num_detectors, replace=False)
         detector_text = ""
         detector_id = 0
@@ -302,7 +291,7 @@ class Core():
             else:
                 xe135_array += [0]
 
-            detector_text += f"det peb_{i}_{round(data['x'],4)}_{round(data['y'],4)}_{round(data['z'],4)}_ ds peb{detector_id}_s -1 de standard_grid\n"
+            detector_text += f"det peb_{i}_{round(data['x'],4)}_{round(data['y'],4)}_{round(data['z'],4)}_ ds peb{detector_id}_s -1 de group18\n"
 
         auxiliary_features = pd.DataFrame({"cs137": cs137_array,
                                            "xe135": xe135_array,

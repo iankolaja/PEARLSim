@@ -1,6 +1,5 @@
 set_max_passes 8
 set_seed 42
-debug_level 0
 core_geometry "gFHR_template.serpent"
 triso_file 400 gFHR_triso.dat
 fresh fuel20 materials/fuel20.dat graphpeb materials/graphpeb.dat
@@ -32,10 +31,18 @@ burn_time 6.525
 set power 280e6
 
 set pop 10000 1500 35
-%generate_training_data 1 4000
-generate_training_data 11 4000
-generate_training_data 22 4000
-generate_training_data 35 4000
-generate_training_data 60 4000
-generate_training_data 85 4000
+#generate_training_data 1 4000
+#generate_training_data 200 4000
+#generate_training_data 50 4000
+#generate_training_data 100 4000
+#generate_training_data 150 4000
 
+#generate_training_data 25 4000
+#generate_training_data 75 4000
+#generate_training_data 125 4000
+#generate_training_data 175 4000
+
+generate_training_data 250 4000
+generate_training_data 300 4000
+generate_training_data 350 4000
+generate_training_data 400 4000

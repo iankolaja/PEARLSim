@@ -2,16 +2,16 @@ import numpy as np
 import pandas as pd
 from pearlsim.material import get_cross_section_string
 
-# Energy grid that is also defined in Serpent template files
+# These energy and spatial bins are defined in the Serpent input
 ENERGY_BINS = np.array([1e-11, 5.8e-08, 1.4e-07, 2.8e-07, 6.25e-07, 9.72e-07, 1.15e-06,
                         1.855e-06, 4e-06, 9.877e-06, 1.5968e-05, 0.000148728, 0.00553,
                         0.009118, 0.111, 0.5, 0.821, 2.231, 10])
-RADIUS_BINS = np.array([0.00000E+00, 3.00000E+01, 6.00000E+01, 9.00000E+01, 1.20000E+02])
-HEIGHT_BINS = np.array([4.92000E+02, 4.42800E+02, 3.93600E+02, 3.44400E+02, 2.95200E+02, 2.46000E+02, 1.96800E+02, 1.47600E+02, 9.84000E+01, 4.92000E+01, 0.00000E+00])
+RADIUS_BINS = np.linspace(0, 120, 8+1)
+HEIGHT_BINS = np.flip(np.linspace(60, 369.47, 20+1))
 ENERGY_CENTERS = (ENERGY_BINS[1:] + ENERGY_BINS[:-1])/2
 
 
-def read_det_file(file_name, normalize_and_label=False):
+def read_det_file(file_name, map_name="fine_18group_flux", read_pebbles=False, series_label="bin"):
     reading=False
     energy_centers = ENERGY_CENTERS
     skip_names = ["E", "PHI", "Z", "R"]
@@ -20,10 +20,13 @@ def read_det_file(file_name, normalize_and_label=False):
     y_array = []
     z_array = []
     pebble_flux_matrix = []
+    core_flux_headers = []
+    flattened_flux = []
+    core_flux = np.zeros( (len(RADIUS_BINS)-1, len(HEIGHT_BINS)-1, len(ENERGY_BINS)-1 ) )
     with open(file_name, 'r') as f:
         for line in f:
             line = line.replace("DET","")
-            if "map" in line or "peb" in line:
+            if "flux" in line or "peb" in line:
                 if not any([x in line for x in skip_names]):
                     reading = True
                     data_array = []
@@ -36,52 +39,41 @@ def read_det_file(file_name, normalize_and_label=False):
                         z_array += [float(header[4])]
                         set_name = "peb"
                     else:
-                        set_name = "core_map"
+                        set_name = line.split()[0]
             elif "]" in line and reading:
                 reading = False
-                if set_name == "core_map":
-                    core_flux = data_array
-                elif set_name == "peb":
+                if set_name == "peb":
                     pebble_flux_matrix += [data_array]
             elif reading:
-                data = float(line.split()[10])
-                unc = float(line.split()[11])
-                data_array += [data]
-                unc_array += [unc]
+                line = line.split()
+                if set_name == "peb":
+                    data = float(line[10])
+                    unc = float(line[11])
+                    data_array += [data]
+                    unc_array += [unc]
+                elif set_name == map_name:
+                    bin_e = int(line[1])-1
+                    bin_r = int(line[9])-1
+                    bin_z = int(line[7])-1
+                    data = float(line[10])
+                    volume = np.pi*(RADIUS_BINS[bin_r+1]**2-RADIUS_BINS[bin_r]**2)*(HEIGHT_BINS[bin_z]-HEIGHT_BINS[bin_z+1])
+                    energy_width = ENERGY_BINS[bin_e+1]-ENERGY_BINS[bin_e]
+                    core_flux[bin_r, bin_z, bin_e] = data/volume/energy_width
+                    flattened_flux += [data/volume/energy_width]
+                    core_flux_headers += [f"{series_label}R{bin_r+1}Z{bin_z+1}E{bin_e+1}"]
+
     pebble_flux_matrix = np.array(pebble_flux_matrix)
-    features = pd.DataFrame({"x": x_array, "y": y_array, "z": z_array })
-    num_detectors = len(features)
-    if normalize_and_label:
-        core_flux_headers = []
-        num_radius_bins = len(RADIUS_BINS)-1
-        num_height_bins = len(HEIGHT_BINS)-1
-        num_energy_bins = len(ENERGY_BINS)-1
-        bin_e = 0
-        bin_r = -1
-        bin_z = 0
-        for i in range(len(core_flux)):
-            if bin_r == num_radius_bins-1:
-                bin_r = 0
-                if bin_z == num_height_bins-1:
-                    bin_z = 0
-                    bin_e += 1
-                else:
-                    bin_z += 1
-            else:
-                bin_r += 1
-            # Calculate volume of a washer, noting that height bins are in descending
-            # order while radius bins are increasing
-            volume = np.pi*(RADIUS_BINS[bin_r+1]**2-RADIUS_BINS[bin_r]**2)*(HEIGHT_BINS[bin_z]-HEIGHT_BINS[bin_z+1])
-            energy_width = ENERGY_BINS[bin_e+1]-ENERGY_BINS[bin_e]
-            core_flux[i] = core_flux[i]/volume/energy_width
-            core_flux_headers += [f"binR{bin_r+1}Z{bin_z+1}E{bin_e+1}"]
-    else:
-        core_flux_headers = ["bin" + str(n) for n in range(1, 1 + len(core_flux))]
-    features = pd.concat([features, pd.DataFrame([core_flux]*num_detectors,
-                          columns=core_flux_headers)], axis=1)
-    targets = pd.DataFrame(pebble_flux_matrix, columns=energy_centers)
-    avg_uncertainty = np.mean(np.array(unc_array))
-    return features, targets, id_array, avg_uncertainty
+    core_flux_series = pd.Series(data=flattened_flux, index=core_flux_headers)
+                    
+    if read_pebbles:
+        features = pd.DataFrame({"x": x_array, "y": y_array, "z": z_array })
+        num_detectors = len(features)
+        targets = pd.DataFrame(pebble_flux_matrix, columns=energy_centers)
+        avg_uncertainty = np.mean(np.array(unc_array))
+        return features, targets, core_flux, core_flux_series, avg_uncertainty, id_array
+    
+    else: 
+        return core_flux, core_flux_series
 
 
 def extract_from_bumat(file_path, return_list = True):

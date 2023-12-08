@@ -211,7 +211,8 @@ class Simulation():
                 
             for i in range(starting_step, num_steps+1):
                 print(f"Simulating pebbles (Step {i})")
-                core_flux_map, core_flux_avg_unc = read_core_flux(f"{self.simulation_name}_{i}.serpent_det0.m")
+                core_flux_map, core_flux_avg_unc = read_core_flux(f"{self.simulation_name}_{i}.serpent_det0.m",
+                                                                 normalize_and_label=True)
                 self.pebble_model.update_model(i, self.burnup_time_step, num_substeps, core_flux_map,
                                                insertion_ratios, self.cs_discharge_threshold, self.debug)
 
@@ -226,6 +227,24 @@ class Simulation():
                                                   self.burnup_time_step,
                                                   self.debug)
             self.run_serpent(input_name)
+        
+        if keyword == "save":
+            core_file = f"{self.simulation_name}_core.pkl"
+            pebble_model_file = f"{self.simulation_name}_pebble_model.pkl"
+            simulation_file = f"{self.simulation_name}_simulation.pkl"
+            
+            core_data = pickle.dumps(self.core)
+            with open(core_file, 'wb') as f:
+                f.write(core_data)
+                
+            pebmod_data = pickle.dumps(self.pebble_model)
+            with open(pebble_model_file, 'wb') as f:
+                f.write(pebmod_data)
+            
+            simulation_data = pickle.dumps(self)
+            with open(simulation_file, 'wb') as f:
+                f.write(simulation_data)
+            
 
 
         if keyword == "transport":

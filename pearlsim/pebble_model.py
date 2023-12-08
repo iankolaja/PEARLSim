@@ -7,6 +7,8 @@ import numpy as np
 from pearlsim.ml_utilities import standardize, unstandardize
 from copy import deepcopy
 import json
+from scipy.interpolate import griddata
+import matplotlib.pyplot as plt
 
 class Pebble():
     def __init__(self, x, y, z, material_source, id=random.randint(1,2147483647)):
@@ -116,6 +118,7 @@ class Pebble_Model():
                  burnup_data_std_path = None,
                  burnup_target_mean_path = None,
                  burnup_target_std_path = None,
+                 burnup_important_features_path = None,
                  library = "sklearn"):
         if burnup_data_mean_path is None:
             burnup_data_mean_path = burnup_model_path.replace(".pkl","") + "_data_mean.csv"
@@ -125,17 +128,27 @@ class Pebble_Model():
             burnup_target_mean_path = burnup_model_path.replace(".pkl","") + "_target_mean.csv"
         if burnup_target_std_path is None:
             burnup_target_std_path = burnup_model_path.replace(".pkl","") + "_target_std.csv"
+        if burnup_important_features_path is None:
+            burnup_important_features_path = burnup_model_path.replace(".pkl","") + "_important_features.json"
+        
+        
 
         with open(burnup_model_path, 'rb') as f:
             self.burnup_model = pickle.loads(f.read())
         if library == "sklearn":
-            self.burnup_model.set_params(**{"n_jobs":num_cores*2})
+            if type(self.burnup_model) == dict:
+                for key in self.burnup_model.keys():
+                    self.burnup_model[key].set_params(**{"n_jobs":num_cores})
+            else:
+                self.burnup_model.set_params(**{"n_jobs":num_cores})
         self.burnup_library = library
 
         self.burnup_data_mean = pd.read_csv(burnup_data_mean_path, index_col=0).iloc[:,0]
         self.burnup_data_std = pd.read_csv(burnup_data_std_path, index_col=0).iloc[:,0]
         self.burnup_target_mean = pd.read_csv(burnup_target_mean_path, index_col=0).iloc[:,0]
         self.burnup_target_std = pd.read_csv(burnup_target_std_path, index_col=0).iloc[:,0]
+        with open(burnup_important_features_path, 'r') as f:
+            self.burnup_important_features  = json.load(f)
     def get_velocity(self, z, r):
         for i in reversed(range(len(self.velocity_profile))):
             if z >= self.velocity_profile[i][0]:
@@ -160,10 +173,9 @@ class Pebble_Model():
             height_array = np.zeros(num_pebbles)
             cs137_array = np.zeros(num_pebbles)
             xe135_array = np.zeros(num_pebbles)
-            isfuel_array = np.ones(num_pebbles)
-            #u235_array = np.zeros(num_pebbles)
+            u235_array = np.zeros(num_pebbles)
             
-            conc_array = [None]*num_pebbles
+            conc_array = [[] for _ in range(num_pebbles)]
             
             discharge_data_index = 0
             discharge_data = {}
@@ -184,7 +196,15 @@ class Pebble_Model():
                     xe135_array[p] = peb.material.concentrations['54135<lib>']
                 else:
                     xe135_array[p] = 0
-                #u235_array[p] = peb.material.concentrations['92235<lib>']
+                u235_array[p] = peb.material.concentrations['92235<lib>']
+
+            if debug > 0:
+                plt.figure()
+                plt.scatter(radius_array, height_array)
+                plt.title(f"Pebble positions Step = {iteration}")
+                plt.xlabel("Radial Position (cm)")
+                plt.ylabel("Height (cm)")
+                plt.savefig(f"discrete_pebble_positions_{iteration}_{sub_step}.png")
 
             # Put together df for current ML model to use and predict
             if debug > 0:
@@ -193,64 +213,92 @@ class Pebble_Model():
                                       "height": height_array,
                                       "cs137": cs137_array,
                                       "xe135": xe135_array,
-                                      "is_fuel": isfuel_array})
+                                      "u235": u235_array})
             del(radius_array)
             del(height_array)
             del(cs137_array)
             del(xe135_array)
-            del(isfuel_array)
+            del(u235_array)
             core_flux_df = core_flux.iloc[core_flux.index.repeat(len(current_df))].reset_index(drop=True)
             current_df = pd.concat([current_df,core_flux_df], axis=1)
+            current_df = current_df[self.current_data_mean.index]
             if debug > 0:
                 print("Standardizing current dataframe...")
-            current_df, _, _ = standardize(current_df,
+            current_df_stan, _, _ = standardize(current_df,
                                            self.current_data_mean,
                                            self.current_data_std)
             if debug > 0:
                 print("Predicting pebble currents...")
             if self.current_library == "sklearn":
-                predicted_currents = self.current_model.predict(current_df)
-                predicted_currents = pd.DataFrame(predicted_currents, columns=self.current_target_mean.axes[0].tolist())
+                predicted_currents_stan = self.current_model.predict(current_df_stan)
+                predicted_currents_stan = pd.DataFrame(predicted_currents_stan, columns=self.current_target_mean.axes[0].tolist())
             else:
-                predicted_currents = self.current_model.predict(current_df)
-            del(current_df)
+                predicted_currents_stan = self.current_model.predict(current_df_stan)
              
-            predicted_currents = unstandardize(predicted_currents,
+            predicted_currents = unstandardize(predicted_currents_stan,
                                                self.current_target_mean,
                                                self.current_target_std)
             # Use predicted currents + other features like concentrations for burnup model
+            if debug > 0:
+                R = np.arange(0, 120, 1)
+                Z = np.arange(60, 370, 1)
+                X, Y = np.meshgrid(R, Z)
+                r = current_df['radius'].to_numpy()
+                h = current_df['height'].to_numpy()
+                parameter = '2.9005e-08'
+                param_interpolated = griddata((r,h), predicted_currents[parameter], (X, Y), rescale=True)
+                plt.figure()
+                plt.imshow(np.rot90(param_interpolated,1), extent=(0,120,60,370), aspect='auto')#, vmin=5E13, vmax=1E15)
+                plt.colorbar()
+                plt.title(f"Predicted pebble current spectrum (0.29 eV) Step = {iteration}")
+                plt.xlabel("Radial Position (cm)")
+                plt.ylabel("Height (cm)")
+                plt.savefig(f"2eV_current_{iteration}_{sub_step}.png")
+            del(current_df)
+            del(current_df_stan)
             if debug > 0:
                 print("Creating burnup dataframe...")
             burnup_df = pd.DataFrame({"depletion_time": depletion_time_array})
             predicted_current_df = predicted_currents.drop(columns="power") 
             burnup_df = pd.concat([burnup_df, predicted_current_df], axis=1)
-            conc_df = pd.DataFrame(conc_array, columns=self.burnup_target_mean.axes[0].tolist()).fillna(0)
+            isotope_cols = self.burnup_target_mean.axes[0]
+            conc_df = pd.DataFrame(conc_array, columns=isotope_cols).fillna(0)
             burnup_df = pd.concat([burnup_df, conc_df], axis=1)
             burnup_df['power'] = predicted_currents['power']
+            burnup_df = burnup_df[self.burnup_data_mean.index]
+            print(burnup_df)
+            print(burnup_df['power'])
             
             if debug > 0:
                 print("Log standardizing burnup dataframe...")
-            burnup_df_log = burnup_df.apply(lambda x: np.log10(x + 1))
-            burnup_df_log['power'] = burnup_df['power']
-            burnup_df_log['depletion_time'] = burnup_df['depletion_time']
-            del(burnup_df)
-            burnup_df_stan, _, _ = standardize(burnup_df_log, 
+            #burnup_df_log = burnup_df
+            #burnup_df_log.iloc[:,19:-1] = burnup_df_log.iloc[:,19:-1].apply(lambda x: np.log10(x + 1e-40))
+            #print(burnup_df_log)
+            #del(burnup_df)
+            burnup_df_stan, _, _ = standardize(burnup_df, 
                                           self.burnup_data_mean,
                                           self.burnup_data_std)
-            del(burnup_df_log)
+            del(burnup_df)
             if debug > 0:
                 print("Predicting concentration changes from burnup...")
             if self.burnup_library == "sklearn":
-                predicted_conc_stan = self.burnup_model.predict(burnup_df_stan)
-                predicted_conc_stan = pd.DataFrame(predicted_conc_stan, columns=self.burnup_target_mean.axes[0].tolist())
+                if type(self.burnup_model) == dict:
+                    predicted_conc_stan = pd.DataFrame()
+                    for isotope in isotope_cols:
+                        if debug > 1:
+                            print(f"Predicting isotope {isotope}")
+                        imp_columns = self.burnup_important_features[isotope]
+                        predicted_conc_stan[isotope] = self.burnup_model[isotope].predict(burnup_df_stan[imp_columns])
+                else:
+                    predicted_conc_stan = self.burnup_model.predict(burnup_df_stan)
+                    predicted_conc_stan = pd.DataFrame(predicted_conc_stan, columns=isotope_cols)
             else:
                 predicted_conc_stan = self.burnup_model.predict(predicted_conc_stan)
             del(burnup_df_stan)
-            predicted_conc_log = unstandardize(predicted_conc_stan,
+            predicted_conc = unstandardize(predicted_conc_stan,
                                            self.burnup_target_mean,
                                            self.burnup_target_std)
-            predicted_conc = predicted_conc_log.apply(lambda x:10**(x)-1)
-            del(predicted_conc_log)
+            print(predicted_conc)
             
             if debug > 0:
                 print("Updating fuel pebble concentrations...")
@@ -385,7 +433,7 @@ class Pebble_Model():
             peb = self.pebbles[i]
             peb.reinsert(self.insertion_distribution)
             vz = self.get_velocity(0, peb.r)
-            peb.z = np.random.uniform(0,1)*vz * time_step
+            peb.z += np.random.uniform(0,1)*vz * time_step
             if debug > 1:
                 print(f"Reinserting pebble {peb.id} at x = {peb.x}, y = {peb.y}, z = {peb.z} (pass {peb.pass_num})")
         self.reinsert_indices = []
@@ -405,13 +453,13 @@ class Pebble_Model():
 def gFHR_insertion_distribution(num_pebbles):
     if num_pebbles > 1:
         angles = np.random.uniform(low=0, high=2*np.pi, size=num_pebbles)
-        r_vals = np.random.uniform(low=0, high=118, size=num_pebbles)
+        r_vals = 118*np.random.power(2.5, num_pebbles)
         x_vals = r_vals * np.cos(angles)
         y_vals = r_vals * np.sin(angles)
         z_vals = np.full(num_pebbles, 60)
     else:
         angle = np.random.uniform(low=0, high=2 * np.pi, size=num_pebbles)[0]
-        r_val = np.random.uniform(low=0, high=118, size=num_pebbles)[0]
+        r_val = 118*np.random.power(2.5, num_pebbles)[0]
         x_vals = r_val * np.cos(angle)
         y_vals = r_val * np.sin(angle)
         z_vals = np.full(num_pebbles, 60)[0]

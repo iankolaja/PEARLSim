@@ -69,10 +69,6 @@ class Zone():
             rename_map[key] = new_mat_name
         return rename_map
 
-    def random_assign_remaining(self):
-        while self.num_pebbles > sum(self.inventory.values()):
-            key = random.choice(list(self.inventory.keys()))
-            self.inventory[key] += 1
 
 
     def remove_graphite_pebbles(self, name_base="graphpeb"):
@@ -83,6 +79,14 @@ class Zone():
                 self.inventory[mat_name] = 0
         return removed_pebbles
 
+    def random_assign_remaining(self):
+        random_options = {}
+        for key in self.inventory.keys():
+            random_options[key] = self.inventory[key]
+        while self.num_pebbles > sum(self.inventory.values()):
+            key = random.choices( list(random_options.keys()),
+                                  weights=list(random_options.values()) )[0]
+            self.inventory[key] += 1
 
 
     def propagate_from(self, other_zone):
@@ -96,13 +100,14 @@ class Zone():
         rename_map = {}
         for instruction in insert_fracs:
             insert_name, insert_amount = instruction
+            if insert_amount == 0:
+                continue
             if insert_name == "reinsert":
                 rename_step = self.set_fractions(reinsert_inventory)
             else:
                 rename_step = self.set_fractions({insert_name: insert_amount})
             rename_map.update(rename_step)
         self.random_assign_remaining()
-
         return rename_map
 
     def print_status(self):
@@ -129,21 +134,38 @@ class Out_Of_Core_Bin():
         self.inventory = {}
         self.num_pebbles = 0
 
-    def increment_pass(self):
+   # def increment_pass(self):
+   #     rename_map = {}
+   #     new_inventory = {}
+   #     for key in list(self.inventory.keys()):
+   #         split_key = key.split("P")
+   #         if len(split_key) > 1:
+   #             pass_number = int(split_key[1]) + 1
+   #             new_key = f"{split_key[0]}P{pass_number}"
+   #             new_inventory[new_key] = self.inventory[key]
+   #             rename_map[key] = new_key
+   #     self.inventory = new_inventory
+   #     self.num_pebbles = sum(self.inventory.values())
+   #     return rename_map
+
+    def to_reinsert(self, do_increment=True):
+        reinsert_bin = Out_Of_Core_Bin()
         rename_map = {}
         new_inventory = {}
         for key in list(self.inventory.keys()):
             split_key = key.split("P")
+            new_name = split_key[0].replace("discharge","reinsert")
             if len(split_key) > 1:
-                pass_number = int(split_key[1]) + 1
-                new_key = f"{split_key[0]}P{pass_number}"
+                pass_number = int(split_key[1])
+                if do_increment:
+                     pass_number += 1
+                new_key = f"{new_name}P{pass_number}"
                 new_inventory[new_key] = self.inventory[key]
                 rename_map[key] = new_key
-        self.inventory = new_inventory
-        self.num_pebbles = sum(self.inventory.values())
-        return rename_map
-
-
+        reinsert_bin.inventory = new_inventory
+        reinsert_bin.num_pebbles = sum(new_inventory.values())
+        return reinsert_bin, rename_map
+        
 
     def clear(self):
         self.inventory = {}

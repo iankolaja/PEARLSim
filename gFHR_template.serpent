@@ -150,7 +150,13 @@ cell c_flibe u_flibe FLiBeInC -infinite
 
 %%%%%%%%%%% Simulation parameters %%%%%%%%%%%
 
-ene standard_grid 1
+ene group3 1 
+1.00000e-11
+0.62500e-6
+1.00000e-4
+20.0
+
+ene group18 1
 1.00000e-11
 5.80000e-08
 1.40000e-07
@@ -172,10 +178,31 @@ ene standard_grid 1
 1.00000e+01
 
 
-det core_map n
-  de standard_grid
+det zone_3group_flux n
+  de group3
   dn 1
   0 120 4
   0 360 1
   60 369.47 10
+
+det zone_power n
+  dn 1
+  0 120 4
+  0 360 1
+  60 369.47 10
+  dr -8 void
+
+det fine_18group_flux n
+  de group18
+  dn 1
+  0 120 8
+  0 360 1
+  60 369.47 20
+
+det fine_power n
+  dn 1
+  0 120 8
+  0 360 1
+  60 369.47 10
+  dr -8 void
 

@@ -18,7 +18,7 @@ class Simulation():
         self.num_nodes = 1
         self.days = 0
         self.burnup_time_step = 6.525 # days
-        self.cs_discharge_threshold = 1
+        self.fima_discharge_threshold = 17
         self.pebble_model = Pebble_Model()
         self.debug = 0
         self.serpent_settings = {"pop": "10000 50 25"}
@@ -129,13 +129,7 @@ class Simulation():
             except:
                     print(f"Failed to load {file_path}. Does the file exist?")
 
-        if keyword == "set_max_passes":
-            try:
-                self.core.max_passes = int(line[1])
-                print(f"Set maximum number of passes to {self.core.max_passes}.")
-            except:
-                print("Invalid maximum number of passes provided.")
-
+                
         if keyword == "initialize":
             num_pebbles = int(line[1])
             fuel_ratios = line[2:]
@@ -159,36 +153,56 @@ class Simulation():
             serpent_flag = int(line[3]) # 0 for no serpent, 1 to run serpent, 2 to use serpent results that already exist
             insertion_ratios = get_insertion_ratio_pairs(line[4:])
             for step in range(num_steps):
-                self.core.insert(insertion_ratios, self.cs_discharge_threshold, self.pebble_model, debug=self.debug)
-                if serpent_flag == 1:
+                self.core.insert(insertion_ratios, self.fima_discharge_threshold, self.pebble_model, debug=self.debug)
+
+                bumat_name = f"{self.simulation_name}_{self.core.iteration}.serpent.bumat1"
+                
+                # If Serpent mode 2 is on, check to see if results for the step
+                # already do, and skip it if so.
+                if os.path.isfile(bumat_name) and serpent_flag == 2:
+                    print(f"{bumat_name} file already exists. Skipping iteration.")
+                    self.core.update_from_bumat(self.debug)
+                    self.core.iteration += 1
+                else:
                     input_name = self.core.generate_input(self.serpent_settings,
                                                           0,
                                                           self.burnup_time_step,
                                                           self.debug)
                     self.run_serpent(input_name)
                     self.core.save_zone_maps(f"zone_map{self.core.iteration}.json")
+                    self.core.save_discharge_inventory(f"{self.simulation_name}_discharge_inventory{self.core.iteration}.json")
                     self.core.update_from_bumat(self.debug)
                     self.days += self.burnup_time_step
                     self.core.iteration += 1
-                elif serpent_flag == 2:
-                    self.core.update_from_bumat(self.debug)
-                    self.core.iteration += 1
-                elif serpent_flag == 3:
-                    self.core.update_from_bumat(self.debug)
-                    input_name = self.core.generate_input(self.serpent_settings,
-                                                          0,
-                                                          self.burnup_time_step,
-                                                          self.debug)
-                    self.core.save_zone_maps(f"zone_map{self.core.iteration}.json")
-                    self.core.iteration += 1
+
+
+        if keyword == "averaging_mode":
+            mode = lint[1]
+            if mode == "pass":
+                self.core.averaging_mode = "pass"
+                print("Top zone averaging mode set to pass.")
+            elif model == "burnup":
+                self.core.averaging_mode = "burnup"
+                print("Top zone averaging mode set to burnup.")
 
         if keyword == "set_threshold":
-            self.cs_discharge_threshold = float(line[1])
-            print(f"Set discharge cs137 concentration to {self.cs_discharge_threshold}.")
+            self.fima_discharge_threshold = float(line[1])
+            print(f"Set discharge fima to {self.fima_discharge_threshold}.")
+        
+        if keyword == "set_num_fuel_groups":
+            self.core.fuel_groups = int(line[1])
+            print(f"Set number of fuel groups for averaging to {self.core.fuel_groups}.")
 
         if keyword == "set_burnup_timestep":
             self.burnup_time_step = float(line[1])
             print(f"Set burnup time step to {self.burnup_time_step} days.")
+
+        if keyword == "set_max_passes":
+            try:
+                self.core.max_passes = int(line[1])
+                print(f"Set maximum number of passes to {self.core.max_passes}.")
+            except:
+                print("Invalid maximum number of passes provided.")
 
         if keyword == "load_from_step":
             load_iteration = int(line[1])
@@ -214,7 +228,7 @@ class Simulation():
                 core_flux_map, core_flux_avg_unc = read_core_flux(f"{self.simulation_name}_{i}.serpent_det0.m",
                                                                  normalize_and_label=True)
                 self.pebble_model.update_model(i, self.burnup_time_step, num_substeps, core_flux_map,
-                                               insertion_ratios, self.cs_discharge_threshold, self.debug)
+                                               insertion_ratios, self.fima_discharge_threshold, self.debug)
 
         if keyword == "generate_training_data":
             step = int(line[1])

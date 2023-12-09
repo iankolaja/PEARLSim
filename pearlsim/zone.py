@@ -1,6 +1,8 @@
 import pandas as pd
 import random
 import numpy as np
+import json
+from .get_fima import get_fima
 
 def _get_fuel_type(mat_name):
     name = mat_name.split("_")
@@ -39,7 +41,7 @@ class Zone():
         for key in insertion_fractions.keys():
             #if "fuel" in key:
             #for p in range(num_passes):
-            fuel_name = f"{key}_R{self.radial_num}Z{self.axial_num}P{1}"
+            fuel_name = f"{key}_R{self.radial_num}Z{self.axial_num}G{1}"
             self.inventory[fuel_name] = int(self.num_pebbles*insertion_fractions[key])
             #else:
             #    mat_name = f"{key}_R{self.radial_num}Z{self.axial_num}"
@@ -55,11 +57,11 @@ class Zone():
         remaining_unassigned_pebbles = 0
         for key in fractions.keys():
             try:
-                pass_number = int(key.split("P")[1])
+                group_number = int(key.split("G")[1])
             except:
-                pass_number = 1
+                group_number = 1
             mat_base_name = _get_fuel_type(key)
-            new_mat_name = f"{mat_base_name}_R{self.radial_num}Z{self.axial_num}P{pass_number}"
+            new_mat_name = f"{mat_base_name}_R{self.radial_num}Z{self.axial_num}G{group_number}"
             num_pebbles_to_set = int(round(fractions[key]*self.num_pebbles))
             remaining_unassigned_pebbles = self.num_pebbles-self.num_pebbles_assigned
             if num_pebbles_to_set > remaining_unassigned_pebbles:
@@ -148,20 +150,29 @@ class Out_Of_Core_Bin():
    #     self.num_pebbles = sum(self.inventory.values())
    #     return rename_map
 
-    def to_reinsert(self, do_increment=True):
+    def to_reinsert(self, averaging_mode, do_increment=True):
         reinsert_bin = Out_Of_Core_Bin()
         rename_map = {}
         new_inventory = {}
         for key in list(self.inventory.keys()):
-            split_key = key.split("P")
-            new_name = split_key[0].replace("discharge","reinsert")
-            if len(split_key) > 1:
-                pass_number = int(split_key[1])
-                if do_increment:
-                     pass_number += 1
-                new_key = f"{new_name}P{pass_number}"
-                new_inventory[new_key] = self.inventory[key]
-                rename_map[key] = new_key
+            if averaging_mode == "pass":
+                split_key = key.split("G")
+                new_name = split_key[0].replace("discharge","reinsert")
+                if len(split_key) > 1:
+                    group_number = int(split_key[1])
+                    if do_increment:
+                         group_number += 1
+                    new_key = f"{new_name}G{group_number}"
+                    new_inventory[new_key] = self.inventory[key]
+                    rename_map[key] = new_key
+            else:
+                split_key = key.split("G")
+                new_name = split_key[0].replace("discharge","reinsert")
+                if len(split_key) > 1:
+                    group_number = int(split_key[1])
+                    new_key = f"{new_name}G{group_number}"
+                    new_inventory[new_key] = self.inventory[key]
+                    rename_map[key] = new_key
         reinsert_bin.inventory = new_inventory
         reinsert_bin.num_pebbles = sum(new_inventory.values())
         return reinsert_bin, rename_map
@@ -204,7 +215,7 @@ class Out_Of_Core_Bin():
         removed_pebbles = 0
         new_inventory = {}
         for key in self.inventory.keys():
-            split_key = key.split("P")
+            split_key = key.split("G")
             if len(split_key) > 1:
                 pass_number = int(split_key[1]) + 1
                 if pass_number <= max_passes:
@@ -214,3 +225,27 @@ class Out_Of_Core_Bin():
         self.num_pebbles -= removed_pebbles
         self.inventory = new_inventory
         return removed_pebbles
+    
+    
+    def remove_threshold(self, threshold, core_materials, initial_atoms):
+        removed_pebbles = 0
+        new_inventory = {}
+        for key in self.inventory.keys():
+            material_fima = get_fima(core_materials[key], initial_atoms)
+            if material_fima > threshold:
+                removed_pebbles += self.inventory[key]
+            else:
+                new_inventory[key] = self.inventory[key]
+        self.num_pebbles -= removed_pebbles
+        self.inventory = new_inventory
+        return removed_pebbles
+
+
+    def save_contents(self, file_name, core_materials):
+        data_dict = {}
+        for key in self.inventory.keys():
+            data_dict[key]['count'] = self.inventory[key]
+            data_dict[key]['concentration'] = core_materials[key].concentrations
+        with open(file_name, 'w') as f:
+            json.dump(data_dict)
+                

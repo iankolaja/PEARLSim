@@ -43,9 +43,12 @@ class Core():
         self.num_z = []
         self.static_fuel_materials = {}
         self.max_passes = 8
+        self.fuel_groups = 12
         self.iteration = 1
         self.pebble_radius = 2.0
         self.num_top_zone_pebbles = 0
+        self.averaging_mode = "pass"
+        self.initial_actinides = 0.00466953+0.0189728 # u235 x u238
         self.materials = {}
         self.fresh_pebbles = {}
         self.pebble_locations = pd.DataFrame([], columns=["x","y","z","r","zone_r","zone_z","material"])
@@ -136,7 +139,7 @@ class Core():
         if debug >= 1:
             print("Clearing discharge inventory...")
             
-        self.reinsert_inventory, rename_map = self.discharge_inventory.to_reinsert()
+        self.reinsert_inventory, rename_map = self.discharge_inventory.to_reinsert(self.averaging_mode)
         self.rename_materials(rename_map)
 
             
@@ -180,13 +183,19 @@ class Core():
         removed_pebbles = self.discharge_inventory.remove_fractions(removal_fractions, self.always_remove_graphite)
         if debug >= 1:
             print(f"Removed {removed_pebbles} pebbles based on fraction of comparable simulated pebbles crossing threshold.")
-        removed_pebbles = self.discharge_inventory.remove_max_passes(self.max_passes)
+        if self.averaging_mode == "pass":
+            removed_pebbles = self.discharge_inventory.remove_max_passes(self.max_passes)
+        else:
+            removed_pebbles = self.discharge_inventory.remove_threshold(threshold, self.materials, self.initial_actinides)
         if debug >= 1:
             print(f"Removed {removed_pebbles} pebbles based on zone materials exceeding hard limit.")
 
         if debug >= 1:
             print(f"Volume averaging discharge inventory by pass...")
-        self.volume_average_by_pass(self.discharge_inventory)
+        if self.averaging_mode == "pass":
+            self.volume_average_by_pass(self.discharge_inventory)
+        elif self.averaging_model == "burnup":
+            self.volume_average_by_burnup(self.discharge_inventory)
 
         if debug >= 1:
             print(f"Inserting pebbles at bottom of core...")
@@ -200,8 +209,62 @@ class Core():
                     self.zones[r_zone][z_zone].print_status()
             print(self.discharge_inventory.inventory)
 
+
         # Perform out of core burn calculations here
 
+
+    def volume_average_by_burnup(self, out_of_core_bin,):
+        averaged_materials = {}
+        averaged_materials_fractions = {}
+        fuel_types = _get_fuel_types(out_of_core_bin.inventory)
+
+        fima_values = []
+        material_keys = []
+        for key in out_of_core_bin.inventory.keys():
+            if "fuel" in key:
+                material_keys += [key]
+                fima_values += [get_fima(self.materials[key].concentrations)]
+
+        # Assign pebbles to groups based on which bin their concentration
+        # of the selected isotope falls in
+        _, bins = np.histogram(np.array(fima_values), bins=self.fuel_groups-1)
+        bins[-1] = bins[-1]+1e-5 # Make sure the largest value is included in the last bin
+        group_assignments = np.digitize(fima_values, bins)+1 
+
+        # Go through each type of fuel (if applicable), and each group 
+        # as defined by binned isotope values
+        for g in range(2, 1+self.fuel_groups):
+            for fuel_type in fuel_types:
+                grouped_materials = {}
+                total_group_pebbles = 0
+                
+                pebbles_in_group = np.where(group_assignments == g)
+
+                # Iterate through all pebbles in a group and select the ones
+                # of the fuel type currently being constructed
+                for index in pebbles_in_group:
+                    key = material_keys[index]
+                    if fuel_type in key:
+                        grouped_materials[key] = out_of_core_bin.inventory[key]
+                        total_group_pebbles += out_of_core_bin.inventory[key]
+
+                # If this pebble group is nonzero, create a new material to volume average
+                if total_group_pebbles > 0:
+                    averaged_grouped_material_key = f"avgdischarge_{fuel_type}_G{g}"
+                    averaged_grouped_material = Material(averaged_grouped_material_key, {},
+                                              temperature=0, density="sum fix")
+                    average_temperature = 0
+                    for key in grouped_materials.keys():
+                        pebbles_in_material = grouped_materials[key]
+                        volume_fraction = pebbles_in_material/total_group_pebbles
+                        averaged_grouped_material = averaged_grouped_material + (self.materials[key]*volume_fraction)
+                        average_temperature += self.materials[key].temperature * volume_fraction
+                    averaged_materials[averaged_grouped_material_key] = total_group_pebbles
+                    averaged_grouped_material.temperature = average_temperature
+                    self.materials[averaged_grouped_material_key] = averaged_grouped_material
+
+        # Reassign the inventories as just the new averaged material
+        out_of_core_bin.inventory = averaged_materials
 
     def volume_average_by_pass(self, out_of_core_bin):
         averaged_materials = {}
@@ -216,7 +279,7 @@ class Core():
 
                 # Iterate through all bin pebbles to see if they're that pebble type
                 for key in out_of_core_bin.inventory.keys():
-                    _,pass_num = key.split("P")
+                    _,pass_num = key.split("G")
 
                     # If so, add them to the grouped materials dictionary and count them
                     if int(pass_num) == p and fuel_type in key:
@@ -225,9 +288,9 @@ class Core():
 
                 # If this pebble group is nonzero, create a new material to volume average
                 if total_group_pebbles > 0:
-                    averaged_grouped_material_key = f"avgdischarge_{fuel_type}_P{p}"
+                    averaged_grouped_material_key = f"avgdischarge_{fuel_type}_G{p}"
                     averaged_grouped_material = Material(averaged_grouped_material_key, {},
-                                              temperature=0, pass_num=pass_num, density="sum fix")
+                                              temperature=0, density="sum fix")
                     average_temperature = 0
                     for key in grouped_materials.keys():
                         pebbles_in_material = grouped_materials[key]
@@ -361,6 +424,15 @@ class Core():
         with open(file_name, 'w') as f:
             f.write(zone_str)
         return zone_str
+
+
+    def save_discharge_inventory(self, file_name):
+        data_dict = {}
+        for key in self.discharge_inventory.inventory.keys():
+            data_dict[key]['count'] = self.discharge_inventory.inventory[key]
+            data_dict[key]['concentration'] = core_materials[key].concentrations
+        with open(file_name, 'w') as f:
+            json.dump(data_dict, f)
 
     def load_zone_maps(self, file_name):
         with open(file_name, 'r') as f:

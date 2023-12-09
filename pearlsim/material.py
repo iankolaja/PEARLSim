@@ -22,7 +22,7 @@ def get_cross_section_string(temperature):
 
 
 class Material():
-    def __init__(self, name, source, temperature = 959, pass_num = None, density=None,
+    def __init__(self, name, source, temperature = 959, density=None,
                  rgb = (np.random.randint(50,150), np.random.randint(50,150), np.random.randint(50,150))):
         self.concentrations = {}
         if type(source) == str:
@@ -61,7 +61,6 @@ class Material():
             self.concentrations = deepcopy(source.concentrations)
             self.density = source.density
         self.name = name
-        self.pass_num = pass_num
         self.rgb = rgb
         self.temperature = temperature
         self.cross_section_str = get_cross_section_string(temperature)

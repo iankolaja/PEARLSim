@@ -1,4 +1,5 @@
 from pearlsim.simulation import Simulation
+from pearlsim.ml_model_wrappers import SingleModelWrapper, XSModelWrapper
 import argparse
 
 parser = argparse.ArgumentParser()
@@ -23,6 +24,7 @@ if args.workingdir:
 if args.cores:
     print("Setting number of cores", args.cores)
     simulation.cpu_cores = int(args.cores)
+    simulation.pebble_model.num_cores = int(args.cores)
 if args.nodes:
     print("Setting number of nodes", args.nodes)
     simulation.num_nodes = int(args.nodes)

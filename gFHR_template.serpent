@@ -99,6 +99,11 @@ mat reflectorS -1.74 tmp 900 moder  grph 6000 rgb 150 150 150
 therm grph 900 gre6.18t gre6.20t
 
 
+% B4C, with assumed 100 at percent B-10 and 1.76 g/cc density per gFHR reactivity control
+% with assumption of 70 percent theoretical density
+mat B4C -1.76 tmp 900 rgb 100 100 255
+ 5010.09c 4.000
+ 6000.09c 1.000
 
 
 %%%%%%%%%%% Static Geometry %%%%%%%%%%%
@@ -125,9 +130,53 @@ surf RV_surf            cylz    0.0 0.0 191.00      0.0      429.47
 surf refl_bottom_surf   cylz    0.0 0.0 120.00      0.0      60.0
 surf refl_top_surf      cylz    0.0 0.0 120.00      369.47   429.47
 
+%%--- control rods
+
+surf cr1 cylz  121.6401  39.52330  2.6 60.00 429.47
+surf cr2 cylz  75.1777   103.4733  2.6 60.00 429.47
+surf cr3 cylz  0.0000    127.9000  2.6 60.00 429.47
+surf cr4 cylz -75.1777   103.4733  2.6 60.00 429.47
+surf cr5 cylz -121.6401  39.52330  2.6 60.00 429.47
+surf cr6 cylz -121.6401 -39.52330  2.6 60.00 429.47
+surf cr7 cylz -75.1777  -103.4733  2.6 60.00 429.47
+surf cr8 cylz -0.0000   -127.9000  2.6 60.00 429.47
+surf cr9 cylz  75.1777  -103.4733  2.6 60.00 429.47
+surf cr10 cylz 121.6401 -39.52330  2.6 60.00 429.47
+
+surf rod_insertion_limit pz <insertion_position>
+
+cell cr1        0  B4C   -cr1 rod_insertion_limit
+cell cr1_flibe  0  FLiBe -cr1 -rod_insertion_limit
+ 
+cell cr2        0  B4C   -cr2 rod_insertion_limit
+cell cr2_flibe  0  FLiBe -cr2 -rod_insertion_limit
+ 
+cell cr3        0  B4C   -cr3 rod_insertion_limit
+cell cr3_flibe  0  FLiBe -cr3 -rod_insertion_limit
+ 
+cell cr4        0  B4C   -cr4 rod_insertion_limit
+cell cr4_flibe  0  FLiBe -cr4 -rod_insertion_limit
+ 
+cell cr5        0  B4C   -cr5 rod_insertion_limit
+cell cr5_flibe  0  FLiBe -cr5 -rod_insertion_limit
+ 
+cell cr6        0  B4C   -cr6 rod_insertion_limit
+cell cr6_flibe  0  FLiBe -cr6 -rod_insertion_limit
+ 
+cell cr7        0  B4C   -cr7 rod_insertion_limit
+cell cr7_flibe  0  FLiBe -cr7 -rod_insertion_limit
+ 
+cell cr8        0  B4C   -cr8 rod_insertion_limit
+cell cr8_flibe  0  FLiBe -cr8 -rod_insertion_limit
+ 
+cell cr9        0  B4C   -cr9 rod_insertion_limit
+cell cr9_flibe  0  FLiBe -cr9 -rod_insertion_limit
+
+cell cr10       0  B4C   -cr10 rod_insertion_limit
+cell cr10_flibe 0  FLiBe -cr10 -rod_insertion_limit
 
 cell c_pb               0   fill u_pb     -core_surf
-cell c_refl_side        0   reflectorS    -refl_side_surf core_surf refl_bottom_surf refl_top_surf
+cell c_refl_side        0   reflectorS    -refl_side_surf core_surf refl_bottom_surf refl_top_surf cr1 cr2 cr3 cr4 cr5 cr6 cr7 cr8 cr9 cr10
 cell c_refl_bottom      0   reflectorB    -refl_bottom_surf
 cell c_refl_top         0   reflectorT    -refl_top_surf
 
@@ -143,11 +192,6 @@ cell c_flibe u_flibe FLiBeInC -infinite
 
 
 
-
-
-
-
-
 %%%%%%%%%%% Simulation parameters %%%%%%%%%%%
 
 ene group3 1 
@@ -156,53 +200,46 @@ ene group3 1
 1.00000e-4
 20.0
 
-ene group18 1
+
+ene finegroup 4 scale56_ext
+
+ene group7 1 0.000e+00 1.000e-07 6.250e-07 7.000e-06 1.012e-04 1.700e-02 7.500e-01 2.000e+01
+
+ene onegroup 1
 1.00000e-11
-5.80000e-08
-1.40000e-07
-2.80000e-07
-6.25000e-07
-9.72000e-07
-1.15000e-06
-1.85500e-06
-4.00000e-06
-9.87700e-06
-1.59680e-05
-1.48728e-04
-5.53000e-03
-9.11800e-03
-1.11000e-01
-5.00000e-01
-8.21000e-01
-2.23100e+00
-1.00000e+01
+20.0
+
+set nfg onegroup
 
 
-det zone_3group_flux n
+det subzone_3group_flux n
   de group3
-  dn 1
-  0 120 4
-  0 360 1
-  60 369.47 10
+  dn 4
+  8 1 20
+  0.0000 42.4264 60.0000 73.4847 84.8528 94.8683 103.9230 112.2497 120.0000
+  0.0000 360.0000
+  60.0000 75.4735 90.947 106.4205 121.894 137.3675 152.841 168.3145 183.788 199.2615 214.735 230.2085 245.682 261.1555 276.629 292.1025 307.576 323.0495 338.523 353.9965 369.4700 
 
-det zone_power n
-  dn 1
-  0 120 4
-  0 360 1
-  60 369.47 10
+det coarse_7group_flux n
+  de group7
+  dn 4
+  3 1 8
+  0.0000 69.2820 97.9796 120.0000
+  0.0000 360.0000
+  60.000 98.6838 137.3675 176.0512 214.7350 253.4188 292.1025 330.7862 369.4700
+
+det subzone_power n
+  dn 4
+  8 1 20
+  0.0000 42.4264 60.0000 73.4847 84.8528 94.8683 103.9230 112.2497 120.0000
+  0.0000 360.0000
+  60.0000 75.4735 90.947 106.4205 121.894 137.3675 152.841 168.3145 183.788 199.2615 214.735 230.2085 245.682 261.1555 276.629 292.1025 307.576 323.0495 338.523 353.9965 369.4700 
   dr -8 void
 
-det fine_18group_flux n
-  de group18
+det core_56group_flux n
+  de finegroup
   dn 1
-  0 120 8
+  0 120 1
   0 360 1
-  60 369.47 20
-
-det fine_power n
-  dn 1
-  0 120 8
-  0 360 1
-  60 369.47 10
-  dr -8 void
+  60 369.47 1
 

@@ -34,9 +34,6 @@ surf matrix_outer sph 0 0 0 1.80 % graphite matrix maximum radius
 surf pebble_outer sph 0 0 0 2.0 % graphite matrix maximum radius
 
 
-mat fuel sum fix 09c 959 rgb 73 99 98  tmp 959  rgb 150 75 110 burn 1 moder  grph_fuel 6012
-<concentrations>
-
 
 mat SiC -3.18 rgb 76 159 137 tmp <temperature> moder  grph 6000
   14028.09c    0.0440455
@@ -77,16 +74,16 @@ set mvol fuel 1 0.36263376
 
 %%%%%%%%%%% Simulation parameters %%%%%%%%%%%
 
-set nps 200000000
+set nps <particles>
 set ures 1
-set power <power>
+
 
 src pebble_current n
 ss -pebble_outer
 <current>
 
-dep daystep <time>
 set seed  42
+% set impl 1 1 0 0
 set acelib  "/global/home/groups/co_nuclear/serpent/xsdata/endfb7/sss_endfb7u.xsdata" "/global/home/groups/co_nuclear/serpent_photon_data/mcplib.xsdata"
 set declib  "/global/home/groups/co_nuclear/serpent/xsdata/endfb7/sss_endfb7.dec"
 set pdatadir  "/global/home/groups/co_nuclear/serpent_photon_data/photon_data"
@@ -98,7 +95,50 @@ set repro  0
 set shbuf  0 0
 set outp  100000
 set nbuf  1000
-set depout  3 1
 set ures  1
 set inventory  all
-set printm  1 0.0
+set printm  1 1.0E-41
+set fpcut  0
+
+
+ene group70 4 defaultmg_ext
+
+ene group18 1
+1.00000e-11
+5.80000e-08
+1.40000e-07
+2.80000e-07
+6.25000e-07
+9.72000e-07
+1.15000e-06
+1.85500e-06
+4.00000e-06
+9.87700e-06
+1.59680e-05
+1.48728e-04
+5.53000e-03
+9.11800e-03
+1.11000e-01
+5.00000e-01
+8.21000e-01
+2.23100e+00
+1.00000e+01
+
+det fuel_flux n
+  dm fuel
+  de group70
+  
+det pebble_flux n
+  du 0
+  de group70
+  
+det fuel_flux_coarse n
+  du 0
+  de group18
+  
+
+mat fuel sum fix 09c 959 rgb 73 99 98  tmp 959  rgb 150 75 110 burn 1 moder  grph_fuel 6012
+<concentrations>
+
+
+

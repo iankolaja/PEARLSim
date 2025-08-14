@@ -1,0 +1,115 @@
+set_seed 42
+set_averaging_mode burnup
+set_threshold 17.0
+core_geometry "gFHR_template.serpent"
+triso_file 800 gFHR_triso.dat
+# load_pebble_model ml_models/current_rfr.pkl ml_models/burnup_rfr.pkl
+# load_velocity_profile gFHR_velocity_profile.dat
+fresh fuel20 materials/fuel20.dat graphpeb materials/graphpeb.dat
+static_fuel_materials SiC materials/SiC_gFHR.dat PyC materials/PyC_gFHR.dat buffer materials/buffer_gFHR.dat matrix materials/matrix_gFHR.dat
+define_zones gFHR_zones.inp gFHR_points.dat
+
+set seed 42
+set acelib "/global/home/groups/co_nuclear/serpent/xsdata/endfb7/sss_endfb7u.xsdata" "/global/home/groups/co_nuclear/serpent_photon_data/mcplib.xsdata"
+set declib "/global/home/groups/co_nuclear/serpent/xsdata/endfb7/sss_endfb7.dec"
+set pdatadir "/global/home/groups/co_nuclear/serpent_photon_data/photon_data"
+set nfylib "/global/home/groups/co_nuclear/serpent/xsdata/endfb7/sss_endfb7.nfy"
+set opti 2
+set gcu -1
+set memfrac 0.99
+set repro 0
+set shbuf 0 0
+set outp 100000
+set nbuf 1000
+set depout 3 1
+set ures 1
+set inventory all
+set printm 1 1.0E-41
+set fpcut 0
+set xenon 1
+
+initialize 100 graphpeb 1
+
+# Begin serpent runs here!
+set opti 2
+set pop 24000 30 10
+
+debug_level 2
+
+set_discharge_threshold 18.63
+set_threshold_rel_std 0.02288
+set_rod_depth 369.47
+
+set_burnup_time_step 13.050
+set_power 2.8e6
+insertion 9 off 0 graphpeb 0.0 reinsert 1.0 fuel20 1.0
+set_num_fuel_groups 4
+
+insertion 21 off 2 graphpeb 0.91 reinsert 1.0 fuel20 1.0
+
+set_burnup_time_step 6.525
+insertion 20 off 2 graphpeb 0.91 reinsert 1.0 fuel20 1.0
+
+set_burnup_time_step 13.050
+insertion 10 off 2 graphpeb 0.91 reinsert 1.0 fuel20 1.0
+insertion 10 off 2 graphpeb 0.84 reinsert 1.0 fuel20 1.0
+
+set_power 5.6e6
+insertion 10 off 2 graphpeb 0.84 reinsert 1.0 fuel20 1.0
+
+set_burnup_time_step 11.419
+insertion 10 off 2 graphpeb 0.84 reinsert 1.0 fuel20 1.0
+
+set_burnup_time_step 9.788
+insertion 10 off 2 graphpeb 0.84 reinsert 1.0 fuel20 1.0
+
+set_burnup_time_step 8.156
+insertion 10 off 2 graphpeb 0.84 reinsert 1.0 fuel20 1.0
+
+set_burnup_time_step 6.525
+insertion 10 off 2 graphpeb 0.84 reinsert 1.0 fuel20 1.0
+
+set_power 14e6
+insertion 10 off 2 graphpeb 0.84 reinsert 1.0 fuel20 1.0
+
+set_num_fuel_groups 8
+
+set_power 32e6
+insertion 5 off 2 graphpeb 0.78 reinsert 1.0 fuel20 1.0
+insertion 5 off 2 graphpeb 0.72 reinsert 1.0 fuel20 1.0
+
+set_num_fuel_groups 12
+set_power 46e6
+insertion 5 off 2 graphpeb 0.64 reinsert 1.0 fuel20 1.0
+insertion 10 off 2 graphpeb 0.58 reinsert 1.0 fuel20 1.0
+
+set_power 140e6
+insertion 10 off 2 graphpeb 0.50 reinsert 1.0 fuel20 1.0
+
+set_burnup_time_step 9.500
+insertion 15 off 2 graphpeb 0.50 reinsert 1.0 fuel20 1.0
+
+set_burnup_time_step 13.500
+insertion 15 off 2 graphpeb 0.50 reinsert 1.0 fuel20 1.0
+
+set_power 180e6
+insertion 10 off 2 graphpeb 0.50 reinsert 1.0 fuel20 1.0
+insertion 10 off 2 graphpeb 0.25 reinsert 1.0 fuel20 1.0
+
+set_burnup_time_step 8.500
+insertion 10 off 2 graphpeb 0.25 reinsert 1.0 fuel20 1.0
+
+set_burnup_time_step 6.525
+insertion 10 off 2 graphpeb 0.25 reinsert 1.0 fuel20 1.0
+
+set_burnup_time_step 9.000
+set_power 200e6
+insertion 15 off 2 graphpeb 0.25 reinsert 1.0 fuel20 1.0
+
+set_burnup_time_step 10.000
+insertion 15 off 2 graphpeb 0.15 reinsert 1.0 fuel20 1.0
+
+
+
+
+save

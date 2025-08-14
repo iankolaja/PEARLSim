@@ -1,0 +1,615 @@
+set_seed 42
+set_averaging_mode burnup
+set_threshold 17.0
+core_geometry "gFHR_template.serpent"
+triso_file 800 gFHR_triso.dat
+# load_pebble_model ml_models/current_rfr.pkl ml_models/burnup_rfr.pkl
+# load_velocity_profile gFHR_velocity_profile.dat
+fresh fuel20 materials/fuel20.dat graphpeb materials/graphpeb.dat
+static_fuel_materials SiC materials/SiC_gFHR.dat PyC materials/PyC_gFHR.dat buffer materials/buffer_gFHR.dat matrix materials/matrix_gFHR.dat
+define_zones gFHR_zones.inp gFHR_points.dat
+
+set seed 42
+set acelib "/global/home/groups/co_nuclear/serpent/xsdata/endfb7/sss_endfb7u.xsdata" "/global/home/groups/co_nuclear/serpent_photon_data/mcplib.xsdata"
+set declib "/global/home/groups/co_nuclear/serpent/xsdata/endfb7/sss_endfb7.dec"
+set pdatadir "/global/home/groups/co_nuclear/serpent_photon_data/photon_data"
+set nfylib "/global/home/groups/co_nuclear/serpent/xsdata/endfb7/sss_endfb7.nfy"
+set opti 2
+set gcu -1
+set memfrac 0.99
+set repro 0
+set shbuf 0 0
+set outp 100000
+set nbuf 1000
+set depout 3 1
+set ures 1
+set inventory all
+set printm 1 1.0E-41
+set fpcut 0
+set xenon 1
+
+initialize 100 graphpeb 1
+
+# Begin serpent runs here!
+set opti 2
+set pop 24000 30 10
+
+debug_level 2
+
+
+set_discharge_threshold 18.63
+set_threshold_rel_std 0.02288
+set_burnup_time_step 3.425
+set_power 1.0e6
+set_rod_depth 369.47
+
+insertion 9 off 0 graphpeb 0.91 reinsert 1.0 fuel20 1.0
+set_num_fuel_groups 4
+insertion 24 off 2 graphpeb 0.91 reinsert 1.0 fuel20 1.0
+
+set_burnup_time_step 14.050
+insertion 5 off 2 graphpeb 0.902 reinsert 1.0 fuel20 1.0
+
+insertion 5 off 2 graphpeb 0.887 reinsert 1.0 fuel20 1.0
+
+
+set_num_fuel_groups 8
+set_burnup_time_step 8.86
+set_power 7e6
+insertion 5 off 2 graphpeb 0.89 reinsert 1.0 fuel20 1.0
+set_num_fuel_groups 12
+insertion 5 off 2 graphpeb 0.88 reinsert 1.0 fuel20 1.0
+insertion 5 off 2 graphpeb 0.87 reinsert 1.0 fuel20 1.0
+
+% Automated Steps Belowset_discharge_threshold 18.63 
+set_burnup_time_step 6.525 
+set_power 37000000.0 
+set_rod_depth 365.47 
+insertion 2 off 2 graphpeb 0.8685 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 17.63 
+set_burnup_time_step 6.525 
+set_power 37000000.0 
+set_rod_depth 365.47 
+insertion 4 off 2 graphpeb 0.867 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 17.63 
+set_burnup_time_step 6.525 
+set_power 40000000.0 
+set_rod_depth 365.47 
+insertion 1 off 2 graphpeb 0.8655 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 17.63 
+set_burnup_time_step 6.525 
+set_power 38500000.0 
+set_rod_depth 365.47 
+insertion 4 off 2 graphpeb 0.8655 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 17.63 
+set_burnup_time_step 6.525 
+set_power 38500000.0 
+set_rod_depth 365.47 
+insertion 4 off 2 graphpeb 0.8655 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 17.63 
+set_burnup_time_step 6.525 
+set_power 35500000.0 
+set_rod_depth 365.47 
+insertion 3 off 2 graphpeb 0.8505 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 17.63 
+set_burnup_time_step 6.525 
+set_power 65500000.0 
+set_rod_depth 365.47 
+insertion 3 off 2 graphpeb 0.8445 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 17.63 
+set_burnup_time_step 6.525 
+set_power 67000000.0 
+set_rod_depth 365.47 
+insertion 4 off 2 graphpeb 0.837 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 17.63 
+set_burnup_time_step 6.525 
+set_power 74500000.0 
+set_rod_depth 365.47 
+insertion 2 off 2 graphpeb 0.831 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 17.63 
+set_burnup_time_step 6.525 
+set_power 74500000.0 
+set_rod_depth 365.47 
+insertion 4 off 2 graphpeb 0.828 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 17.63 
+set_burnup_time_step 6.525 
+set_power 73000000.0 
+set_rod_depth 365.47 
+insertion 2 off 2 graphpeb 0.798 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 17.63 
+set_burnup_time_step 6.525 
+set_power 80500000.0 
+set_rod_depth 365.47 
+insertion 4 off 2 graphpeb 0.798 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 17.63 
+set_burnup_time_step 6.525 
+set_power 88000000.0 
+set_rod_depth 360.47 
+insertion 2 off 2 graphpeb 0.828 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 18.63 
+set_burnup_time_step 6.525 
+set_power 118000000.0 
+set_rod_depth 340.47 
+insertion 5 off 2 graphpeb 0.828 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 18.63 
+set_burnup_time_step 6.525 
+set_power 115000000.0 
+set_rod_depth 341.47 
+insertion 3 off 2 graphpeb 0.8265 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 20.63 
+set_burnup_time_step 6.525 
+set_power 116500000.0 
+set_rod_depth 341.47 
+insertion 3 off 2 graphpeb 0.822 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 20.63 
+set_burnup_time_step 6.525 
+set_power 115000000.0 
+set_rod_depth 351.47 
+insertion 1 off 2 graphpeb 0.792 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 20.63 
+set_burnup_time_step 6.525 
+set_power 100000000.0 
+set_rod_depth 351.47 
+insertion 2 off 2 graphpeb 0.807 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 20.63 
+set_burnup_time_step 6.525 
+set_power 103000000.0 
+set_rod_depth 331.47 
+insertion 10 off 2 graphpeb 0.792 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 21.63 
+set_burnup_time_step 6.525 
+set_power 101500000.0 
+set_rod_depth 331.47 
+insertion 1 off 2 graphpeb 0.7875 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 21.63 
+set_burnup_time_step 6.525 
+set_power 101500000.0 
+set_rod_depth 331.47 
+insertion 5 off 2 graphpeb 0.7875 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 21.63 
+set_burnup_time_step 6.525 
+set_power 95500000.0 
+set_rod_depth 321.47 
+insertion 10 off 2 graphpeb 0.7905 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 21.63 
+set_burnup_time_step 6.651 
+set_power 98500000.0 
+set_rod_depth 321.47 
+insertion 3 off 2 graphpeb 0.798 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 21.63 
+set_burnup_time_step 6.651 
+set_power 98500000.0 
+set_rod_depth 321.47 
+insertion 3 off 2 graphpeb 0.7965 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 22.63 
+set_burnup_time_step 6.651 
+set_power 128500000.0 
+set_rod_depth 320.47 
+insertion 10 off 2 graphpeb 0.789 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 22.63 
+set_burnup_time_step 6.651 
+set_power 130000000.0 
+set_rod_depth 300.47 
+insertion 3 off 2 graphpeb 0.7845 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 22.83 
+set_burnup_time_step 6.651 
+set_power 137500000.0 
+set_rod_depth 300.47 
+insertion 3 off 2 graphpeb 0.8145 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 22.83 
+set_burnup_time_step 6.651 
+set_power 107500000.0 
+set_rod_depth 295.47 
+insertion 5 off 2 graphpeb 0.819 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 23.83 
+set_burnup_time_step 6.651 
+set_power 110500000.0 
+set_rod_depth 275.47 
+insertion 3 off 2 graphpeb 0.8175 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 23.83 
+set_burnup_time_step 6.651 
+set_power 125500000.0 
+set_rod_depth 271.47 
+insertion 2 off 2 graphpeb 0.8175 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 23.83 
+set_burnup_time_step 6.651 
+set_power 127000000.0 
+set_rod_depth 274.47 
+insertion 4 off 2 graphpeb 0.813 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 24.83 
+set_burnup_time_step 6.651 
+set_power 127000000.0 
+set_rod_depth 274.47 
+insertion 3 off 2 graphpeb 0.813 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 24.83 
+set_burnup_time_step 6.651 
+set_power 157000000.0 
+set_rod_depth 274.47 
+insertion 10 off 2 graphpeb 0.81 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 24.83 
+set_burnup_time_step 6.651 
+set_power 187000000.0 
+set_rod_depth 274.47 
+insertion 4 off 2 graphpeb 0.8055 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 24.83 
+set_burnup_time_step 6.651 
+set_power 217000000.0 
+set_rod_depth 269.47 
+insertion 5 off 2 graphpeb 0.8055 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 24.23 
+set_burnup_time_step 6.651 
+set_power 217000000.0 
+set_rod_depth 279.47 
+insertion 2 off 2 graphpeb 0.7755 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 24.63 
+set_burnup_time_step 6.651 
+set_power 224500000.0 
+set_rod_depth 277.47 
+insertion 2 off 2 graphpeb 0.771 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 24.63 
+set_burnup_time_step 6.651 
+set_power 239500000.0 
+set_rod_depth 277.47 
+insertion 5 off 2 graphpeb 0.768 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 24.63 
+set_burnup_time_step 6.651 
+set_power 254500000.0 
+set_rod_depth 277.47 
+insertion 5 off 2 graphpeb 0.768 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 24.63 
+set_burnup_time_step 6.651 
+set_power 248500000.0 
+set_rod_depth 277.47 
+insertion 10 off 2 graphpeb 0.753 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 24.63 
+set_burnup_time_step 6.441 
+set_power 253000000.0 
+set_rod_depth 273.47 
+insertion 1 off 2 graphpeb 0.7485 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 24.63 
+set_burnup_time_step 6.441 
+set_power 268000000.0 
+set_rod_depth 271.47 
+insertion 3 off 2 graphpeb 0.741 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 24.63 
+set_burnup_time_step 6.441 
+set_power 283000000.0 
+set_rod_depth 267.47 
+insertion 10 off 2 graphpeb 0.741 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 24.63 
+set_burnup_time_step 6.441 
+set_power 253000000.0 
+set_rod_depth 267.47 
+insertion 10 off 2 graphpeb 0.7395 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 23.83 
+set_burnup_time_step 6.441 
+set_power 253000000.0 
+set_rod_depth 267.47 
+insertion 2 off 2 graphpeb 0.7095 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 24.23 
+set_burnup_time_step 6.441 
+set_power 253000000.0 
+set_rod_depth 267.47 
+insertion 5 off 2 graphpeb 0.7095 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 24.23 
+set_burnup_time_step 6.441 
+set_power 253000000.0 
+set_rod_depth 265.47 
+insertion 1 off 2 graphpeb 0.6945 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 23.83 
+set_burnup_time_step 6.441 
+set_power 253000000.0 
+set_rod_depth 265.47 
+insertion 1 off 2 graphpeb 0.6945 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 23.83 
+set_burnup_time_step 6.441 
+set_power 253000000.0 
+set_rod_depth 265.47 
+insertion 10 off 2 graphpeb 0.7245 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 23.03 
+set_burnup_time_step 6.441 
+set_power 253000000.0 
+set_rod_depth 263.47 
+insertion 4 off 2 graphpeb 0.7185 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 23.03 
+set_burnup_time_step 6.441 
+set_power 250000000.0 
+set_rod_depth 263.47 
+insertion 3 off 2 graphpeb 0.717 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 19.03 
+set_burnup_time_step 6.441 
+set_power 250000000.0 
+set_rod_depth 243.47 
+insertion 3 off 2 graphpeb 0.7095 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 15.03 
+set_burnup_time_step 6.399 
+set_power 250000000.0 
+set_rod_depth 239.47 
+insertion 2 off 2 graphpeb 0.6795 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 14.03 
+set_burnup_time_step 6.399 
+set_power 250000000.0 
+set_rod_depth 239.47 
+insertion 10 off 2 graphpeb 0.6795 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 18.03 
+set_burnup_time_step 6.399 
+set_power 250000000.0 
+set_rod_depth 236.47 
+insertion 10 off 2 graphpeb 0.678 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 18.03 
+set_burnup_time_step 6.399 
+set_power 250000000.0 
+set_rod_depth 236.47 
+insertion 1 off 2 graphpeb 0.675 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 18.03 
+set_burnup_time_step 6.399 
+set_power 250000000.0 
+set_rod_depth 236.47 
+insertion 10 off 2 graphpeb 0.675 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 18.03 
+set_burnup_time_step 6.399 
+set_power 250000000.0 
+set_rod_depth 236.47 
+insertion 4 off 2 graphpeb 0.675 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 18.03 
+set_burnup_time_step 6.399 
+set_power 235000000.0 
+set_rod_depth 236.47 
+insertion 10 off 2 graphpeb 0.6735 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 16.03 
+set_burnup_time_step 6.399 
+set_power 250000000.0 
+set_rod_depth 236.47 
+insertion 10 off 2 graphpeb 0.6735 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 16.03 
+set_burnup_time_step 6.399 
+set_power 250000000.0 
+set_rod_depth 236.47 
+insertion 10 off 2 graphpeb 0.6675 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 16.03 
+set_burnup_time_step 6.399 
+set_power 244000000.0 
+set_rod_depth 236.47 
+insertion 5 off 2 graphpeb 0.6375 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 15.83 
+set_burnup_time_step 6.399 
+set_power 244000000.0 
+set_rod_depth 235.47 
+insertion 2 off 2 graphpeb 0.645 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 15.23 
+set_burnup_time_step 6.189 
+set_power 244000000.0 
+set_rod_depth 230.47 
+insertion 2 off 2 graphpeb 0.63 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 15.23 
+set_burnup_time_step 6.189 
+set_power 244000000.0 
+set_rod_depth 210.47 
+insertion 4 off 2 graphpeb 0.627 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 13.23 
+set_burnup_time_step 6.189 
+set_power 244000000.0 
+set_rod_depth 200.47 
+insertion 4 off 2 graphpeb 0.597 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 13.23 
+set_burnup_time_step 6.189 
+set_power 244000000.0 
+set_rod_depth 199.47 
+insertion 5 off 2 graphpeb 0.567 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 12.83 
+set_burnup_time_step 6.189 
+set_power 244000000.0 
+set_rod_depth 199.47 
+insertion 4 off 2 graphpeb 0.564 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 13.63 
+set_burnup_time_step 6.189 
+set_power 244000000.0 
+set_rod_depth 189.47 
+insertion 4 off 2 graphpeb 0.561 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 15.63 
+set_burnup_time_step 6.189 
+set_power 244000000.0 
+set_rod_depth 189.47 
+insertion 2 off 2 graphpeb 0.5595 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 16.43 
+set_burnup_time_step 6.189 
+set_power 274000000.0 
+set_rod_depth 188.47 
+insertion 5 off 2 graphpeb 0.555 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 16.43 
+set_burnup_time_step 6.189 
+set_power 274000000.0 
+set_rod_depth 184.47 
+insertion 3 off 2 graphpeb 0.552 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 16.83 
+set_burnup_time_step 6.189 
+set_power 274000000.0 
+set_rod_depth 179.47 
+insertion 1 off 2 graphpeb 0.558 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 16.83 
+set_burnup_time_step 6.189 
+set_power 289000000.0 
+set_rod_depth 169.47 
+insertion 2 off 2 graphpeb 0.558 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 12.83 
+set_burnup_time_step 6.189 
+set_power 304000000.0 
+set_rod_depth 189.47 
+insertion 3 off 2 graphpeb 0.558 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 12.83 
+set_burnup_time_step 6.189 
+set_power 299500000.0 
+set_rod_depth 189.47 
+insertion 2 off 2 graphpeb 0.558 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 12.83 
+set_burnup_time_step 6.189 
+set_power 299500000.0 
+set_rod_depth 189.47 
+insertion 10 off 2 graphpeb 0.5505 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 12.83 
+set_burnup_time_step 6.189 
+set_power 299500000.0 
+set_rod_depth 189.47 
+insertion 5 off 2 graphpeb 0.546 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 12.83 
+set_burnup_time_step 6.189 
+set_power 299500000.0 
+set_rod_depth 189.47 
+insertion 10 off 2 graphpeb 0.5385 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 16.83 
+set_burnup_time_step 6.189 
+set_power 299500000.0 
+set_rod_depth 189.47 
+insertion 2 off 2 graphpeb 0.5325 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 16.83 
+set_burnup_time_step 6.189 
+set_power 299500000.0 
+set_rod_depth 185.47 
+insertion 1 off 2 graphpeb 0.5325 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 18.83 
+set_burnup_time_step 6.189 
+set_power 299500000.0 
+set_rod_depth 182.47 
+insertion 4 off 2 graphpeb 0.531 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 18.83 
+set_burnup_time_step 6.189 
+set_power 299500000.0 
+set_rod_depth 182.47 
+insertion 3 off 2 graphpeb 0.531 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 18.03 
+set_burnup_time_step 6.189 
+set_power 299500000.0 
+set_rod_depth 182.47 
+insertion 2 off 2 graphpeb 0.5265 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 18.03 
+set_burnup_time_step 6.189 
+set_power 299500000.0 
+set_rod_depth 182.47 
+insertion 4 off 2 graphpeb 0.4965 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 19.03 
+set_burnup_time_step 7.029 
+set_power 299500000.0 
+set_rod_depth 179.47 
+insertion 3 off 2 graphpeb 0.4965 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 19.63 
+set_burnup_time_step 7.029 
+set_power 301000000.0 
+set_rod_depth 174.47 
+insertion 3 off 2 graphpeb 0.492 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 19.63 
+set_burnup_time_step 7.029 
+set_power 301000000.0 
+set_rod_depth 164.47 
+insertion 4 off 2 graphpeb 0.492 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 19.63 
+set_burnup_time_step 7.029 
+set_power 296500000.0 
+set_rod_depth 159.47 
+insertion 5 off 2 graphpeb 0.492 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 20.63 
+set_burnup_time_step 7.029 
+set_power 296500000.0 
+set_rod_depth 159.47 
+insertion 3 off 2 graphpeb 0.492 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 20.63 
+set_burnup_time_step 7.029 
+set_power 296500000.0 
+set_rod_depth 159.47 
+insertion 2 off 2 graphpeb 0.489 reinsert 1.0 fuel20 1.0 
+
+set_discharge_threshold 20.63 
+set_burnup_time_step 7.029 
+set_power 281500000.0 
+set_rod_depth 159.47 
+insertion 10 off 2 graphpeb 0.4815 reinsert 1.0 fuel20 1.0 
+

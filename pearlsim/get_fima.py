@@ -4,5 +4,5 @@ def get_fima(conc_dict, initial_atoms ):
     for key in conc_dict.keys():
         if int(key[0:2]) >= 89:
             final_actinides += conc_dict[key]
-    return (initial_atoms - final_actinides)/initial_atoms
+    return 100*(initial_atoms - final_actinides)/initial_atoms
     

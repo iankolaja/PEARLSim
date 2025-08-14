@@ -3,6 +3,8 @@ import random
 import numpy as np
 import json
 from .get_fima import get_fima
+from scipy.stats import norm
+
 
 def _get_fuel_type(mat_name):
     name = mat_name.split("_")
@@ -12,20 +14,22 @@ def _get_fuel_type(mat_name):
         fuel_type = name[0]
     return fuel_type
 
+
 class Zone():
-    def __init__(self,num_pebbles,radial_num,axial_num):
+    def __init__(self, num_pebbles, radial_num, axial_num):
         self.num_pebbles = num_pebbles
         self.num_pebbles_assigned = 0
         self.radial_num = radial_num
         self.axial_num = axial_num
         self.pebble_locations = []
         self.inventory = {}
-        #self.pebble_locations = pd.df
+        # self.pebble_locations = pd.df
+
     def get_fractions(self, as_str=False):
         fractions = {}
         for key in self.inventory.keys():
             if as_str:
-                fractions[key] = str(round(100*self.inventory[key] / self.num_pebbles,2))
+                fractions[key] = str(round(100 * self.inventory[key] / self.num_pebbles, 2))
             else:
                 fractions[key] = self.inventory[key] / self.num_pebbles
         return fractions
@@ -39,39 +43,42 @@ class Zone():
         self.pebble_locations = pd.DataFrame(self.pebble_locations, columns=["x", "y", "z", "r"])
         self.inventory = {}
         for key in insertion_fractions.keys():
-            #if "fuel" in key:
-            #for p in range(num_passes):
+            # if "fuel" in key:
+            # for p in range(num_passes):
             fuel_name = f"{key}_R{self.radial_num}Z{self.axial_num}G{1}"
-            self.inventory[fuel_name] = int(self.num_pebbles*insertion_fractions[key])
-            #else:
+            self.inventory[fuel_name] = int(self.num_pebbles * insertion_fractions[key])
+            # else:
             #    mat_name = f"{key}_R{self.radial_num}Z{self.axial_num}"
             #    self.inventory[mat_name] = int(round(self.num_pebbles * insertion_fractions[key]))
         while sum(self.inventory.values()) < self.num_pebbles:
-            self.inventory[random.choice( list(self.inventory.keys()) )] += 1
+            self.inventory[random.choice(list(self.inventory.keys()))] += 1
         if debug >= 1:
             self.print_status()
+
     def set_fractions(self, fractions, reset=False):
         if reset:
             self.reset()
         rename_map = {}
-        remaining_unassigned_pebbles = 0
+        remaining_unassigned_pebbles = self.num_pebbles - self.num_pebbles_assigned
         for key in fractions.keys():
+            if remaining_unassigned_pebbles == 0:
+                break
+            if fractions[key] == 0:
+                continue
             try:
                 group_number = int(key.split("G")[1])
             except:
                 group_number = 1
             mat_base_name = _get_fuel_type(key)
             new_mat_name = f"{mat_base_name}_R{self.radial_num}Z{self.axial_num}G{group_number}"
-            num_pebbles_to_set = int(round(fractions[key]*self.num_pebbles))
-            remaining_unassigned_pebbles = self.num_pebbles-self.num_pebbles_assigned
+            num_pebbles_to_set = int(round(fractions[key] * self.num_pebbles))
+            remaining_unassigned_pebbles = self.num_pebbles - self.num_pebbles_assigned
             if num_pebbles_to_set > remaining_unassigned_pebbles:
                 num_pebbles_to_set = remaining_unassigned_pebbles
             self.inventory[new_mat_name] = num_pebbles_to_set
             self.num_pebbles_assigned += num_pebbles_to_set
             rename_map[key] = new_mat_name
         return rename_map
-
-
 
     def remove_graphite_pebbles(self, name_base="graphpeb"):
         removed_pebbles = 0
@@ -86,10 +93,9 @@ class Zone():
         for key in self.inventory.keys():
             random_options[key] = self.inventory[key]
         while self.num_pebbles > sum(self.inventory.values()):
-            key = random.choices( list(random_options.keys()),
-                                  weights=list(random_options.values()) )[0]
+            key = random.choices(list(random_options.keys()),
+                                 weights=list(random_options.values()))[0]
             self.inventory[key] += 1
-
 
     def propagate_from(self, other_zone):
         other_fraction = other_zone.get_fractions()
@@ -123,9 +129,16 @@ class Zone():
         pebble_s = ""
         pebble_choices = []
         for key in self.inventory.keys():
-            pebble_choices += [key]*self.inventory[key]
+            pebble_choices += [key] * self.inventory[key]
         assignments = np.random.choice(pebble_choices, self.num_pebbles, replace=False)
         self.pebble_locations["material"] = assignments
+        for i in range(len(self.pebble_locations)):
+            peb = self.pebble_locations.iloc[i]
+            pebble_s += f"{peb['x']} {peb['y']} {peb['z']} {peb_radius} u{peb['material']}\n"
+        return pebble_s, self.pebble_locations
+
+    def print_pebbles(self, peb_radius):
+        pebble_s = ""
         for i in range(len(self.pebble_locations)):
             peb = self.pebble_locations.iloc[i]
             pebble_s += f"{peb['x']} {peb['y']} {peb['z']} {peb_radius} u{peb['material']}\n"
@@ -136,19 +149,19 @@ class Out_Of_Core_Bin():
         self.inventory = {}
         self.num_pebbles = 0
 
-   # def increment_pass(self):
-   #     rename_map = {}
-   #     new_inventory = {}
-   #     for key in list(self.inventory.keys()):
-   #         split_key = key.split("P")
-   #         if len(split_key) > 1:
-   #             pass_number = int(split_key[1]) + 1
-   #             new_key = f"{split_key[0]}P{pass_number}"
-   #             new_inventory[new_key] = self.inventory[key]
-   #             rename_map[key] = new_key
-   #     self.inventory = new_inventory
-   #     self.num_pebbles = sum(self.inventory.values())
-   #     return rename_map
+    # def increment_pass(self):
+    #     rename_map = {}
+    #     new_inventory = {}
+    #     for key in list(self.inventory.keys()):
+    #         split_key = key.split("P")
+    #         if len(split_key) > 1:
+    #             pass_number = int(split_key[1]) + 1
+    #             new_key = f"{split_key[0]}P{pass_number}"
+    #             new_inventory[new_key] = self.inventory[key]
+    #             rename_map[key] = new_key
+    #     self.inventory = new_inventory
+    #     self.num_pebbles = sum(self.inventory.values())
+    #     return rename_map
 
     def to_reinsert(self, averaging_mode, do_increment=True):
         reinsert_bin = Out_Of_Core_Bin()
@@ -157,17 +170,17 @@ class Out_Of_Core_Bin():
         for key in list(self.inventory.keys()):
             if averaging_mode == "pass":
                 split_key = key.split("G")
-                new_name = split_key[0].replace("discharge","reinsert")
+                new_name = split_key[0].replace("discharge", "reinsert")
                 if len(split_key) > 1:
                     group_number = int(split_key[1])
                     if do_increment:
-                         group_number += 1
+                        group_number += 1
                     new_key = f"{new_name}G{group_number}"
                     new_inventory[new_key] = self.inventory[key]
                     rename_map[key] = new_key
             else:
                 split_key = key.split("G")
-                new_name = split_key[0].replace("discharge","reinsert")
+                new_name = split_key[0].replace("discharge", "reinsert")
                 if len(split_key) > 1:
                     group_number = int(split_key[1])
                     new_key = f"{new_name}G{group_number}"
@@ -176,7 +189,6 @@ class Out_Of_Core_Bin():
         reinsert_bin.inventory = new_inventory
         reinsert_bin.num_pebbles = sum(new_inventory.values())
         return reinsert_bin, rename_map
-        
 
     def clear(self):
         self.inventory = {}
@@ -194,22 +206,21 @@ class Out_Of_Core_Bin():
     def __mul__(self, coeff):
         multiplied_inventory = {}
         for key in self.inventory.keys():
-            multiplied_inventory[key] = self.inventory[key]*coeff
+            multiplied_inventory[key] = self.inventory[key] * coeff
         return multiplied_inventory
 
-    def remove_fractions(self, fractions, graphite_removal_flag, base_graphite_name = "graphpeb"):
+    def remove_fractions(self, fractions, graphite_removal_flag, base_graphite_name="graphpeb"):
         removed_pebbles = 0
         for key in self.inventory.keys():
             if key in fractions.keys():
                 starting_pebbles = self.inventory[key]
-                self.inventory[key] = int(round(self.inventory[key]*(1-fractions[key])))
+                self.inventory[key] = int(round(self.inventory[key] * (1 - fractions[key])))
                 removed_pebbles += starting_pebbles - self.inventory[key]
             if base_graphite_name in key and graphite_removal_flag:
-                #removed_pebbles += self.inventory[key]
+                # removed_pebbles += self.inventory[key]
                 self.inventory[key] = 0
         self.num_pebbles -= removed_pebbles
         return removed_pebbles
-
 
     def remove_max_passes(self, max_passes):
         removed_pebbles = 0
@@ -225,27 +236,51 @@ class Out_Of_Core_Bin():
         self.num_pebbles -= removed_pebbles
         self.inventory = new_inventory
         return removed_pebbles
-    
-    
-    def remove_threshold(self, threshold, core_materials, initial_atoms):
-        removed_pebbles = 0
+
+    def remove_threshold(self, threshold, threshold_rel_std, core_materials, initial_atoms, debug=0):
+        total_removed_pebbles = 0
         new_inventory = {}
+        removed_inventory = {}
+
         for key in self.inventory.keys():
-            material_fima = get_fima(core_materials[key], initial_atoms)
-            if material_fima > threshold:
-                removed_pebbles += self.inventory[key]
+
+            # Normal CDF discharge
+            material_fima = get_fima(core_materials[key].concentrations, initial_atoms)
+            if material_fima > 0:
+                distribution = norm(material_fima, material_fima * threshold_rel_std)
+                keep_frac = distribution.cdf(threshold)
             else:
-                new_inventory[key] = self.inventory[key]
-        self.num_pebbles -= removed_pebbles
+                keep_frac = 1.0
+            kept_pebbles = round(keep_frac * self.inventory[key])
+            removed_pebbles = self.inventory[key] - kept_pebbles
+            total_removed_pebbles += removed_pebbles
+            if removed_pebbles > 0:
+                removed_inventory[key] = {}
+                removed_inventory[key]["FIMA"] = material_fima
+                removed_inventory[key]["count"] = removed_pebbles
+                removed_inventory[key]["concentrations"] = core_materials[key].concentrations
+            if kept_pebbles > 0:
+                new_inventory[key] = kept_pebbles
+            if debug > 0:
+                print(f"{key}: {material_fima} %FIMA, {kept_pebbles} pebbles kept, {removed_pebbles} pebbles removed")
+
+            ## Percent Discharge
+            # material_fima = get_fima(core_materials[key].concentrations, initial_atoms)
+            # window_fima = threshold - threshold*threshold_rel_std*6
+            # if material_fima > threshold:
+            #    total_removed_pebbles += self.inventory[key]
+            #    print(f"{key} fully removed.")
+            # elif material_fima > window_fima:
+            #    half_pebbles = round(self.inventory[key]*0.5)
+            #    total_removed_pebbles += self.inventory[key]-half_pebbles
+            #    new_inventory[key] = half_pebbles
+            #    print(f"{key} half removed.")
+            # else:
+            #    new_inventory[key] = self.inventory[key]
+            #    print(f"{key} reinserted fully")
+            # print(f"{material_fima} {threshold} {window_fima}")
+        self.num_pebbles -= total_removed_pebbles
         self.inventory = new_inventory
-        return removed_pebbles
+        return total_removed_pebbles, removed_inventory
 
 
-    def save_contents(self, file_name, core_materials):
-        data_dict = {}
-        for key in self.inventory.keys():
-            data_dict[key]['count'] = self.inventory[key]
-            data_dict[key]['concentration'] = core_materials[key].concentrations
-        with open(file_name, 'w') as f:
-            json.dump(data_dict)
-                

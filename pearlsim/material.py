@@ -23,7 +23,7 @@ def get_cross_section_string(temperature):
 
 class Material():
     def __init__(self, name, source, temperature = 959, density=None,
-                 rgb = (np.random.randint(50,150), np.random.randint(50,150), np.random.randint(50,150))):
+                 rgb = (None, None, None)):
         self.concentrations = {}
         if type(source) == str:
             with open(source, 'r') as f:
@@ -62,6 +62,8 @@ class Material():
             self.density = source.density
         self.name = name
         self.rgb = rgb
+        self.fima = 0.0
+        self.fima_last_pass = 0.0
         self.temperature = temperature
         self.cross_section_str = get_cross_section_string(temperature)
         if density is not None:
@@ -84,17 +86,47 @@ class Material():
         for key in self.concentrations.keys():
             new_material.concentrations[key] *= coefficient
         return new_material
+    
+    def fix_B11(self):
+        conc_tot = 0.0
+        if "50110" in self.concentrations.keys():
+            conc_tot += self.concentrations.pop("50110")
+        if "5011<lib>" in self.concentrations.keys():
+            conc_tot += self.concentrations.pop("5011<lib>")
+        self.concentrations["5011<lib>"] = conc_tot
 
+    def merge_duplicates(self, debug):
+        keys_to_remove = []
+        for key in self.concentrations.keys():
+            if key[-1] == '0':
+                new_key = key[:-1] + "<lib>"
+                if new_key in self.concentrations.keys() and new_key != key:
+                    self.concentrations[new_key] += self.concentrations[key]
+                    keys_to_remove += [key]
+                    if debug > 1:
+                        print(f"Merging {key} into {new_key} in {self.name}")
+        for key in keys_to_remove:
+            self.concentrations.pop(key)
+        return keys_to_remove
 
     def write_input(self, triso_counter, static_fuel_mats, debug, volume=None, never_burn=False):
         self.cross_section_str = get_cross_section_string(self.temperature)
+        self.fix_B11()
+        self.merge_duplicates(debug)
         if self.density == "sum fix":
             density_s = f"sum fix {self.cross_section_str[1:]} {round(self.temperature,3)}"
         else:
             density_s = self.density
         if debug >= 3:
             print(f"Writing material {self.name}")
-        input_s = f"mat {self.name} {density_s} rgb {self.rgb[0]} {self.rgb[1]} {self.rgb[2]}  tmp {round(self.temperature,3)}"
+        if None in self.rgb:
+            r = int(self.name.split("R")[1].split("Z")[0])*32+100
+            g = -int(self.name.split("Z")[1].split("G")[0])*15+250
+            b = int(self.name.split("G")[1])*75
+            rgb = (r%255, g%255, b%255)
+        else:
+            rgb = self.rgb
+        input_s = f"mat {self.name} {density_s} rgb {rgb[0]} {rgb[1]} {rgb[2]}  tmp {round(self.temperature,3)}"
         if "graph" in self.name:
             input_s += " moder  grph 6000\n"
         elif volume is not None and not never_burn:
@@ -110,13 +142,11 @@ class Material():
         input_s += "\n"
 
         if "fuel" in self.name:
-            rgb_modifier = 0
             for name in static_fuel_mats.keys():
                 other_mat = static_fuel_mats[name]
-                rgb_modifier += 1
-                input_s += f"mat {self.name}_{name} {other_mat.density} rgb {other_mat.rgb[0]+rgb_modifier*10} " \
-                           f"{other_mat.rgb[1]+rgb_modifier*10} " \
-                           f"{other_mat.rgb[2]+rgb_modifier*10} " \
+                input_s += f"mat {self.name}_{name} {other_mat.density} rgb {rgb[0]} " \
+                           f"{rgb[1]} " \
+                           f"{rgb[2]} " \
                            f"tmp {round(self.temperature,3)} moder  grph 6000\n"
                 for key in other_mat.concentrations.keys():
                     conc_str = f"  {key}    {other_mat.concentrations[key]}\n".replace("<lib>", self.cross_section_str)

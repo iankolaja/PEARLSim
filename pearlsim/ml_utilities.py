@@ -716,7 +716,7 @@ def add_computed_targets(output_df):
     output_df["reactivity"] = (output_df["final_analog_keff"]-1)/output_df["final_analog_keff"]
     return output_df
 
-def split_up_sequence(features, targets, train_split, test_split, val_split, window, seed=42):
+def split_up_sequence(features, targets, train_split, test_split, val_split, window, control_feature_labels, seed=42):
     np.random.seed(seed)
     length, num_features = features.shape
     _, num_targets = targets.shape

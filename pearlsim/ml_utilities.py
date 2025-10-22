@@ -708,8 +708,8 @@ def add_feature_noise(input_df, noise_dict):
         input_df[key] = input_df[key]*noise_array
     return input_df
 
-def exclude_features(input_df):
-    input_df.drop(columns=FEATURES_TO_DROP, errors="ignore")
+def exclude_features(input_df, features_to_drop = []):
+    input_df.drop(columns=features_to_drop, errors="ignore")
     return input_df 
 
 def add_computed_targets(output_df):

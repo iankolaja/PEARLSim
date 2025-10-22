@@ -134,7 +134,7 @@ def read_det_file(file_name, meshes_to_read=["coarse_7group_flux"], read_pebbles
                     volume = np.pi*(radius_grid[bin_r+1]**2-radius_grid[bin_r]**2)*(height_grid[bin_z+1]-height_grid[bin_z])
                     if len(energy_grid) > 1:
                         energy_width = energy_grid[bin_e+1]-energy_grid[bin_e]
-                        meshes[set_name]["data"][bin_r, bin_z, bin_e] = data/volume/(energy_width*1e6)
+                        meshes[set_name]["data"][bin_r, bin_z, bin_e] = data/volume#/(energy_width*1e6)
                         meshes[set_name]["unc"][bin_r, bin_z, bin_e] = unc   
                     else:
                         meshes[set_name]["data"][bin_r, bin_z] = data/volume
@@ -691,3 +691,27 @@ def create_training_split(features, targets, train_split, log_scale_features = [
     data["target_mean"] = target_mean
     data["target_std"] = target_std
     return data
+
+def add_computed_features(input_df):
+    fuel_insertion_fraction = 1-input_df["graphite_insertion_fraction"]
+    for i in range(1, 11):
+        fuel_insertion_fraction[-i] = fuel_insertion_fraction[0]
+    reactor_fuel_fraction = fuel_insertion_fraction.sort_index().rolling(10).sum()[10:]/10
+    input_df["average_power_per_pebble"] = input_df["power"]/reactor_fuel_fraction
+    return input_df
+
+def add_feature_noise(input_df, noise_dict):
+    length = len(input_df)
+    for key in noise_dict.keys():
+        std_dev = noise_dict[key]/np.sqrt(2/np.pi)
+        noise_array = np.random.normal(1, std_dev, length)
+        input_df[key] = input_df[key]*noise_array
+    return input_df
+
+def exclude_features(input_df):
+    input_df.drop(columns=FEATURES_TO_DROP, errors="ignore")
+    return input_df 
+
+def add_computed_targets(output_df):
+    output_df["reactivity"] = (output_df["final_analog_keff"]-1)/output_df["final_analog_keff"]
+    return output_df

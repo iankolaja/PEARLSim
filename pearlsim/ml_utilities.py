@@ -715,3 +715,48 @@ def exclude_features(input_df, features_to_drop = []):
 def add_computed_targets(output_df):
     output_df["reactivity"] = (output_df["final_analog_keff"]-1)/output_df["final_analog_keff"]
     return output_df
+
+def split_up_sequence(features, targets, train_split, test_split, val_split, window, seed=42):
+    np.random.seed(seed)
+    length, num_features = features.shape
+    _, num_targets = targets.shape
+    num_data = length-1
+    num_samples = num_data - window
+    training_size = int(num_samples*train_split)
+    val_size = int(num_samples*val_split)
+    testing_size = int(num_samples*test_split)
+    data_indices = np.arange(window, num_data)
+    np.random.shuffle(data_indices)
+    training_indices = data_indices[0:training_size]
+    testing_indices = data_indices[training_size+1:training_size+testing_size+1]
+    
+    val_indices = data_indices[testing_size+1:training_size+testing_size+val_size+1]
+
+    
+    training_data_list = []
+    training_target_list = []
+    testing_data_list = []
+    testing_target_list = []
+    val_data_list = []
+    val_target_list = []
+    for index in training_indices:
+        training_data_list += [features.iloc[index-window:index].to_numpy().reshape(1, window, num_features)]
+        step_target = [targets.iloc[index]]
+        step_target += [features.iloc[index+1]]
+        training_target_list += [pd.concat([targets.iloc[index], features.iloc[index+1].drop(columns=control_feature_labels)])]
+    for index in testing_indices:
+        testing_data_list += [features.iloc[index-window:index].to_numpy().reshape(1, window, num_features)]
+        testing_target_list += [pd.concat([targets.iloc[index], features.iloc[index+1].drop(columns=control_feature_labels)])]
+    for index in val_indices:
+        val_data_list += [features.iloc[index-window:index].to_numpy().reshape(1, window, num_features)]
+        val_target_list += [pd.concat([targets.iloc[index], features.iloc[index+1].drop(columns=control_feature_labels)])]
+
+    data = {}
+
+    data["training_features"] = np.concatenate(training_data_list)
+    data["testing_features"] = np.concatenate(testing_data_list)
+    data["validation_features"] = np.concatenate(val_data_list)
+    data["training_target"] = pd.DataFrame(training_target_list)
+    data["testing_target"] = pd.DataFrame(testing_target_list)
+    data["validation_target"] = pd.DataFrame(val_target_list)
+    return data

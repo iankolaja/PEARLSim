@@ -6,7 +6,8 @@ import keras
 import numpy as np
 import pandas as pd
 from tensorflow.keras.optimizers import SGD
-from sklearn.metrics import r2_score, mean_absolute_error
+from sklearn.metrics import r2_score, mean_absolute_error, mean_squared_error
+import time
 
 class LSTM_predictor():
     def __init__(self, feature_mean, feature_std, target_mean, target_std):
@@ -23,6 +24,9 @@ class LSTM_predictor():
         self.r2_scores_train = {}
         self.r2_scores_test = {}
         self.r2_scores_val = {}
+        self.mse_scores_train = {}
+        self.mse_scores_test = {}
+        self.mse_scores_val = {}
 
     def standardize(self, training_data_matrix, training_target_df=None, 
                     testing_data_matrix=None, testing_target_df=None,
@@ -95,7 +99,8 @@ class LSTM_predictor():
               validation_data_matrix, validation_target_df, 
               target_labels, feature_labels, epochs_key={}, epochs_default=500, batch_size=1024, learning_rate=0.001, 
               default_network_size=[64], network_size_key={}, predict_labels = [], 
-              input_dropout=0, recurrent_dropout=0, recurrent_regularizer=None):
+              input_dropout=0, recurrent_dropout=0, recurrent_regularizer=None,
+             verbose_flag = 1):
         self.feature_labels = feature_labels
         X_train, X_test, X_val, Y_train_df, Y_test_df, Y_val_df = self.standardize(training_data_matrix, 
                                                              training_target_df, 
@@ -112,6 +117,7 @@ class LSTM_predictor():
         self.history_dict = {}
         
         for label in target_labels:
+            start_time = time.time()
             # Define LSTM model
             if label in epochs_key.keys():
                 label_epochs = epochs_key[label]
@@ -171,7 +177,7 @@ class LSTM_predictor():
             self.history_dict[label] = model.fit(X_train, y_train, 
                            epochs=label_epochs, 
                            batch_size=batch_size, 
-                           verbose=1, 
+                           verbose=verbose_flag, 
                            validation_data=(X_val, y_val),
                            callbacks=[early_stopper])
             self.models[label] = model
@@ -183,6 +189,12 @@ class LSTM_predictor():
             self.r2_scores_train[label] = r2_score(y_train, y_train_pred)
             self.r2_scores_test[label] = r2_score(y_test, y_test_pred)
             self.r2_scores_val[label] = r2_score(y_val, y_val_pred)
+            self.mse_scores_train[label] = mean_squared_error(y_train, y_train_pred)
+            self.mse_scores_test[label] = mean_squared_error(y_test, y_test_pred)
+            self.mse_scores_val[label] = mean_squared_error(y_val, y_val_pred)
+            end_time = time.time()
+            time_taken = round(end_time-start_time,2)
+            print(f"{label} trained. R^2 test = {self.r2_scores_test[label]} ({time_taken}s taken)")
         self.models_trained = True
         return self.history_dict
 

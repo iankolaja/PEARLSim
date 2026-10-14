@@ -5,52 +5,62 @@ import json
 
 class TestLocatePebbles(unittest.TestCase):
     def test_locate_pebbles(self):
-        directory_path = "gFHR_equilibrium/" # Look at gFHR_equilibrium directory
-        if os.path.exists(directory_path) and os.path.isdir(directory_path): # Check if the directory exists
-            items = os.listdir(directory_path) # List items in the directory
-            pebble_position_files = [] # Loop through and add each pebble position file to pebble_position_files list
-            for item in items:
-                if item.startswith("pebble"):
-                    pebble_position_files.append(item) # [pebble_positions_1.csv, ...]
-        else:
-            print(f"The directory '{directory_path}' does not exist or is not a valid directory.")
+        print(os.getcwd())
+        directory_path = "gFHR_sequence" # Look at gFHR_equilibrium directory
+        assert os.path.isdir(directory_path), "gFHR_sequence is not a "+\
+            "directory that exists. Please run gFHR_sequence.inp."
+            
+        # Determine the number of iterations dynamically and collect the pebble
+        # point files.
+        files_in_directory = os.listdir(directory_path)
+        pebble_position_files = [] 
+        iteration_list = []
+        for file_name in files_in_directory:
+            if "pebble_positions" in file_name:
+                pebble_position_files += [file_name]
+                iteration_list += [int("".join(filter(str.isdigit, file_name)))]
 
-        iterations = len(pebble_position_files) # Change # of iterations thru pebble and zone files in gFHR folder
-        for i in range(iterations):
-            pebble_file = f"gFHR_equilibrium/pebble_positions_{i+1}.csv"
-            with open(pebble_file, 'r') as f:  # pebble_positions_1.csv
-                pebble_position_counts = {}
-                #line = f.readline()
-                #if line:  # check if the line is not empty 
+        for iteration in iteration_list:
+            pebble_file = f"{directory_path}/pebble_positions_{iteration}.csv"
+            
+            pebble_position_counts = {}
+            
+            # Identify which material and zone every point in pebble_positions
+            # has been assigned.
+            with open(pebble_file, 'r') as f: 
                 for line in f:  # iterate thru each line
-                    line = line.replace("\n","")
-                    parts = line.split()
-                    last_item = parts[-1]  # ufuel20_R1Z1P6
-                    zoneP = last_item.split('_')[1]  # R1Z1P6
-                    zone = "zone"+zoneP[:-2]  # zoneR1Z1
-                    material = last_item[1:]  # fuel20_R1Z1P6
-                    if zone not in pebble_position_counts.keys():  # Create zone
-                        pebble_position_counts[zone] = {}  # {R1Z1: {}}
-
-
-                    if material in pebble_position_counts[zone].keys():
-                        pebble_position_counts[zone][material] += 1  # Increment material count by 1
+                    line = line.replace("\n","").split()
+                    universe_name = line[-1]                # ufuel20_R1Z1P6
+                    zone_pass_id = universe_name.split('_')[1]   # R1Z1P6
+                    zone_id = "zone"+zone_pass_id[:-2]                # zoneR1Z1
+                    material_key = universe_name.split('_')[0][1:] # fuel20_R1Z1P6
+                    
+                    if zone_id not in pebble_position_counts.keys(): 
+                        pebble_position_counts[zone_id] = {} 
+                        pebble_position_counts[zone_id][material_key] = 1
                     else:
-                        pebble_position_counts[zone][material] = 1  # {R1Z1: {fuel20_zone: 1}}
+                        if material_key in pebble_position_counts[zone_id].keys():
+                            pebble_position_counts[zone_id][material_key] += 1
+                        else:
+                            pebble_position_counts[zone_id][material_key] = 1
 
-            #else:
-                #print("No data in pebble file")
-
-            zone_file = f"gFHR_equilibrium/zone_map{i+1}.json"
+            # Check the zone_map file, which records the internal representation
+            # of zone inventories on each time step.
+            zone_file = f"{directory_path}/zone_map{iteration}.json"
             with open(zone_file, 'r') as json_file:  # zone_map1
-                data = json.load(json_file)
-                top_level_keys = data.keys()  # R1Z1
-                for z in top_level_keys:  # iterate thru zones
-                    subdictionary = data[z]  # {"graphpeb_R1Z1P1": 490, "fuel20_R1Z1P2": 80...}
-                    # iterate thru each key in the subdictionary
-                    for material in subdictionary.keys():
-                        # find the same key in pebble_position_counts[zone][material] and assert the values are equal
-                        assert subdictionary[material] == pebble_position_counts[z][material], f"{material}: {subdictionary[material]} in {z} in zone file does not match {material} : {pebble_position_counts[z][material]} in {z} in pebble file in iteration {i}"    
+                zone_map_data = json.load(json_file)
+            
+            # Iterate through the zone map data and match it against the
+            # pebble point data
+            zone_map_keys = zone_map_data.keys()  # zoneR1Z1
+            for zone_key in zone_map_keys: 
+                zone_data = zone_map_data[zone_key]
+                for material_key in zone_data.keys():
+                    zone_map_count = zone_data[material_key]
+                    peb_file_count = pebble_position_counts[zone_key][material_key]
+                    error_str = f"[Step {iteration}] Mismatch in {zone_key} with {material_key} -"+ \
+                        "{zone_map_count} in zone_map, {peb_file_count} in pebble_positions."
+                    assert zone_map_count == peb_file_count, error_str
 
 if __name__ == '__main__':
     unittest.main()

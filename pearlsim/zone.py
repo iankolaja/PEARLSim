@@ -222,9 +222,10 @@ class Out_Of_Core_Bin():
         self.num_pebbles -= removed_pebbles
         return removed_pebbles
 
-    def remove_max_passes(self, max_passes):
+    def remove_max_passes(self, max_passes, core_materials, initial_atoms):
         removed_pebbles = 0
         new_inventory = {}
+        removed_inventory = {}
         for key in self.inventory.keys():
             split_key = key.split("G")
             if len(split_key) > 1:
@@ -233,9 +234,14 @@ class Out_Of_Core_Bin():
                     new_inventory[key] = self.inventory[key]
                 else:
                     removed_pebbles += self.inventory[key]
+                    removed_inventory[key] = {}
+                    removed_inventory[key]["FIMA"] = get_fima(core_materials[key].concentrations, initial_atoms)
+                    removed_inventory[key]["count"] = self.inventory[key]
+                    removed_inventory[key]["concentrations"] = core_materials[key].concentrations
+                    
         self.num_pebbles -= removed_pebbles
         self.inventory = new_inventory
-        return removed_pebbles
+        return removed_pebbles, removed_inventory
 
     def remove_threshold(self, threshold, threshold_rel_std, core_materials, initial_atoms, debug=0):
         total_removed_pebbles = 0

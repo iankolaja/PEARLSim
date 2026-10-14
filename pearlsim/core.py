@@ -191,7 +191,9 @@ class Core():
             print(
                 f"Removed {removed_pebbles} pebbles based on fraction of comparable simulated pebbles crossing threshold.")
         if self.averaging_mode == "pass":
-            removed_pebbles = self.discharge_inventory.remove_max_passes(self.max_passes)
+            removed_pebbles, removed_inventory = self.discharge_inventory.remove_max_passes(self.max_passes,
+                                                                                           self.materials,
+                                                                                           self.initial_actinides)
         else:
             removed_pebbles, removed_inventory = self.discharge_inventory.remove_threshold(threshold, threshold_rel_std,
                                                                                            self.materials,
@@ -594,6 +596,7 @@ class Core():
             data_dict[key] = parameters[key]
         with open(file_name, 'w') as f:
             json.dump(data_dict, f)
+
 
     def save_discharge_inventory(self, file_name, initial_atoms):
         data_dict = {}

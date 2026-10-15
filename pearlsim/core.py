@@ -39,6 +39,24 @@ def _get_fuel_types(inventory):
     return list(set(fuel_types))
 
 
+def _fuel_type_and_group(key):
+    """('fuel20', 3) from a recirculating material key such as 'avgreinsert_fuel20_G3' or 'held_...'."""
+    if key.startswith("held_"):
+        key = key[len("held_"):]
+    return _get_fuel_type(key), int(key.rsplit("G", 1)[1])
+
+
+def _largest_remainder(total, weights):
+    """Split integer ``total`` in proportion to ``weights`` so the parts sum exactly to ``total``."""
+    weights = np.asarray(weights, dtype=float)
+    exact = total * weights / weights.sum()
+    parts = np.floor(exact).astype(int)
+    shortfall = int(total - parts.sum())
+    order = np.argsort(-(exact - parts), kind="stable")
+    parts[order[:shortfall]] += 1
+    return parts
+
+
 class Core():
     def __init__(self, simulation_name):
         self.zones = []
@@ -64,6 +82,8 @@ class Core():
         self.core_geometry = ""
         self.discharge_inventory = Out_Of_Core_Bin()
         self.reinsert_inventory = Out_Of_Core_Bin()
+        # recirculating pebbles that did not fit at the bottom; reinserted first next step
+        self.held_inventory = {}
         self.always_remove_graphite = True
         # numpy Generator for pebble assignment and shuffling; Simulation seeds it per step
         self.rng = np.random.default_rng()
@@ -149,12 +169,8 @@ class Core():
         self.reinsert_inventory, rename_map = self.discharge_inventory.to_reinsert(self.averaging_mode)
         self.rename_materials(rename_map)
 
-        if self.reinsert_inventory.num_pebbles > 0:
-            reinsert_fracs = dict(zip(self.reinsert_inventory.inventory.keys(),
-                                      map(lambda x: x / self.num_top_zone_pebbles,
-                                          self.reinsert_inventory.inventory.values())))
-        else:
-            reinsert_fracs = {}
+        # held-out pebbles from earlier steps go back in first
+        reinsert_pool = list(self.held_inventory.items()) + list(self.reinsert_inventory.inventory.items())
 
         self.discharge_inventory.clear()
 
@@ -215,10 +231,11 @@ class Core():
 
         if debug >= 1:
             print(f"Inserting pebbles at bottom of core...")
+        self.held_inventory = self.fill_bottom_zones(insert_pebbles, reinsert_pool)
+        with open(f"{self.simulation_name}_held_inventory{self.iteration}.json", "w") as f:
+            json.dump(self.held_inventory, f)
         for r_zone in range(num_radial_channels):
-            rename_map = self.zones[r_zone][0].insert(insert_pebbles, reinsert_fracs, self.rng)
-            self.rename_materials(rename_map)
-            for mat_name in self.zones[r_zone][0].inventory.keys():                 
+            for mat_name in self.zones[r_zone][0].inventory.keys():
                 material_conc = self.materials[mat_name].concentrations
                 fima = get_fima(material_conc, self.initial_actinides)
                 self.materials[mat_name].fima = fima
@@ -230,6 +247,92 @@ class Core():
             print(self.discharge_inventory.inventory)
 
         # Perform out of core burn calculations here
+
+    def fill_bottom_zones(self, insert_pebbles, reinsert_pool):
+        """Refill the bottom zone of every radial channel, conserving recirculating pebbles.
+
+        insert_pebbles: ordered (name, fraction) instructions, e.g.
+            [("graphpeb", g), ("reinsert", 1.0), ("fuel20", 1.0)].
+            A fresh-material fraction is a share of each bottom zone, capped by the space
+            left; "reinsert" places the recirculating pool.
+        reinsert_pool: ordered (material key, pebble count) pairs; earlier entries have priority.
+
+        The pool is split between channels in proportion to zone size with
+        largest-remainder rounding (review #37). Pebbles that do not fit are returned
+        as the held inventory, re-keyed ``held_<key>``, to be reinserted first next step
+        instead of being lost (review #7). Materials that land on the same zone
+        material name are volume-averaged by pebble count.
+        """
+        bottoms = [channel[0] for channel in self.zones]
+        capacity = np.array([zone.num_pebbles for zone in bottoms])
+        remaining = capacity.copy()
+        sources = [dict() for _ in bottoms]  # zone material name -> {source material key: pebbles}
+        held = {}
+
+        def place(r, source_key, fuel_type, group, n):
+            n = int(n)
+            name = f"{fuel_type}_R{bottoms[r].radial_num}Z{bottoms[r].axial_num}G{group}"
+            sources[r].setdefault(name, {})
+            sources[r][name][source_key] = sources[r][name].get(source_key, 0) + n
+            remaining[r] -= n
+
+        for name, fraction in insert_pebbles:
+            if fraction == 0:
+                continue
+            if name == "reinsert":
+                for key, count in reinsert_pool:
+                    split = _largest_remainder(count, capacity)
+                    leftover = 0
+                    for r in range(len(bottoms)):
+                        n = min(split[r], remaining[r])
+                        leftover += split[r] - n
+                        if n:
+                            place(r, key, *_fuel_type_and_group(key), n)
+                    for r in np.argsort(-remaining, kind="stable"):  # spare room elsewhere
+                        n = min(leftover, remaining[r])
+                        if n:
+                            place(r, key, *_fuel_type_and_group(key), n)
+                            leftover -= n
+                    if leftover:
+                        held_key = key if key.startswith("held_") else f"held_{key}"
+                        held[held_key] = held.get(held_key, 0) + int(leftover)
+            else:
+                for r in range(len(bottoms)):
+                    n = min(int(round(fraction * capacity[r])), remaining[r])
+                    if n:
+                        place(r, name, name, 1, n)
+
+        for r, zone in enumerate(bottoms):
+            zone.reset()
+            for zone_name, contributions in sources[r].items():
+                self._set_mixture(zone_name, contributions)
+                zone.inventory[zone_name] = sum(contributions.values())
+            zone.num_pebbles_assigned = sum(zone.inventory.values())
+            zone.random_assign_remaining(self.rng)  # only if the instructions leave the zone short
+        for held_key in held:
+            if held_key not in self.materials:
+                self.materials[held_key] = deepcopy(self.materials[held_key[len("held_"):]])
+                self.materials[held_key].name = held_key
+        return held
+
+    def _set_mixture(self, name, contributions):
+        """Make ``self.materials[name]`` the pebble-weighted mixture of the contributing materials."""
+        lookup = {key: (self.fresh_pebbles[key] if key in self.fresh_pebbles else self.materials[key])
+                  for key in contributions}
+        if len(contributions) == 1:
+            (key,) = contributions
+            material = deepcopy(lookup[key])
+        else:
+            total = sum(contributions.values())
+            first = lookup[next(iter(contributions))]
+            material = Material(name, {}, temperature=0, density=first.density)
+            temperature = 0.0
+            for key, n in contributions.items():
+                material = material + lookup[key] * (n / total)
+                temperature += lookup[key].temperature * n / total
+            material.temperature = temperature
+        material.name = name
+        self.materials[name] = material
 
     def volume_average_by_burnup(self, out_of_core_bin, ):
         averaged_materials = {}

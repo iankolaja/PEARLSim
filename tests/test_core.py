@@ -82,22 +82,75 @@ def test_fuel_moves_up_one_zone_per_insert(core):
     assert core.zones[0][0].inventory == {"graphpeb_R1Z1G1": 9, "fuel20_R1Z1G2": 9}
 
 
-def _reinserted_after_graphite_increase(core):
+def _recirculating_fuel(core):
+    """Group >= 2 fuel pebbles at the bottom of every channel, and held out of the core."""
+    placed = sum(n for r in range(core.num_r) for k, n in core.zones[r][0].inventory.items()
+                 if k.startswith("fuel20") and not k.endswith("G1"))
+    return placed, sum(core.held_inventory.values())
+
+
+def test_graphite_increase_holds_out_overflow(core, tmp_path):
+    """Review #7 (fixed): recirculating fuel that does not fit is held out, not lost."""
     core.iteration = 1
     core.insert(INSERT, THRESHOLD, REL_STD)  # discharges 18 fresh fuel pebbles, none discarded
     core.iteration = 2
     core.insert([("graphpeb", 0.8), ("reinsert", 1.0), ("fuel20", 1.0)], THRESHOLD, REL_STD)
-    return sum(core.zones[r][0].inventory.get(f"fuel20_R{r + 1}Z1G2", 0) for r in range(core.num_r))
+    # 14 graphite per 18-pebble bottom zone leaves room for 4 + 4 of the 18 recirculating pebbles
+    assert _recirculating_fuel(core) == (8, 10)
+    assert json.loads((tmp_path / "synthetic_held_inventory2.json").read_text()) == core.held_inventory
+    assert zone_totals(core) == [[18, 18, 18], [18, 18, 18]]
 
 
-def test_graphite_increase_truncates_reinsertion(core):
-    """v1 behaviour (review #7): only 8 of 18 recirculating fuel pebbles are reinserted."""
-    assert _reinserted_after_graphite_increase(core) == 8
+def test_held_pebbles_are_reinserted_first(core):
+    fresh = core.fresh_pebbles["fuel20"]
+    for key in ("held_avgreinsert_fuel20_G5", "avgreinsert_fuel20_G2"):
+        core.materials[key] = Material(key, dict(fresh.concentrations))
+    # 9 + 9 free places after graphite; the 10 held pebbles go in before the 18 new ones
+    held = core.fill_bottom_zones([("graphpeb", 0.5), ("reinsert", 1.0), ("fuel20", 1.0)],
+                                  [("held_avgreinsert_fuel20_G5", 10), ("avgreinsert_fuel20_G2", 18)])
+    placed_g5 = sum(core.zones[r][0].inventory.get(f"fuel20_R{r + 1}Z1G5", 0) for r in range(2))
+    placed_g2 = sum(core.zones[r][0].inventory.get(f"fuel20_R{r + 1}Z1G2", 0) for r in range(2))
+    assert (placed_g5, placed_g2) == (10, 8)
+    assert held == {"held_avgreinsert_fuel20_G2": 10}
+    assert "held_avgreinsert_fuel20_G2" in core.materials
 
 
-@pytest.mark.xfail(strict=True, reason="review #7: reinsertion overflow is truncated, not conserved")
-def test_graphite_increase_conserves_recirculating_fuel(core):
-    assert _reinserted_after_graphite_increase(core) == 18
+def test_overflow_is_conserved_over_steps(core):
+    core.iteration = 1
+    core.insert(INSERT, THRESHOLD, REL_STD)
+    core.iteration = 2
+    core.insert([("graphpeb", 0.8), ("reinsert", 1.0), ("fuel20", 1.0)], THRESHOLD, REL_STD)
+    core.iteration = 3
+    core.insert(INSERT, THRESHOLD, REL_STD)
+    # 10 held + 18 newly discharged recirculating pebbles; 18 places free after graphite
+    assert _recirculating_fuel(core) == (18, 10)
+
+
+def test_reinsertion_split_is_exact(core):
+    """Review #37 (fixed): pool counts are split between channels without rounding loss."""
+    fresh = core.fresh_pebbles["fuel20"]
+    pool = []
+    for g, count in ((2, 5), (3, 7), (4, 1)):
+        key = f"avgreinsert_fuel20_G{g}"
+        core.materials[key] = Material(key, dict(fresh.concentrations))
+        pool.append((key, count))
+    held = core.fill_bottom_zones([("graphpeb", 0.5), ("reinsert", 1.0), ("fuel20", 1.0)], pool)
+    assert held == {}
+    placed = {g: sum(core.zones[r][0].inventory.get(f"fuel20_R{r + 1}Z1G{g}", 0) for r in range(2))
+              for g in (2, 3, 4)}
+    assert placed == {2: 5, 3: 7, 4: 1}
+    assert zone_totals(core)[0][0] == zone_totals(core)[1][0] == 18
+
+
+def test_same_group_sources_are_volume_averaged(core):
+    fresh = core.fresh_pebbles["fuel20"].concentrations
+    a = Material("held_avgreinsert_fuel20_G3", {k: v for k, v in fresh.items()})
+    b = Material("avgreinsert_fuel20_G3", {k: v * 0.5 for k, v in fresh.items()})
+    core.materials[a.name], core.materials[b.name] = a, b
+    core.fill_bottom_zones([("graphpeb", 0.5), ("reinsert", 1.0), ("fuel20", 1.0)],
+                           [(a.name, 6), (b.name, 2)])
+    mixed = core.materials["fuel20_R1Z1G3"].concentrations["92235<lib>"]
+    assert mixed == pytest.approx(fresh["92235<lib>"] * (6 + 2 * 0.5) / 8)
 
 
 def test_burnup_averaging_with_only_graphite_yields_empty_inventory(core):

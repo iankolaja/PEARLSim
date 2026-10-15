@@ -38,30 +38,6 @@ def test_propagate_renames_to_destination_zone_and_conserves_count():
     assert sum(above.inventory.values()) == 18
 
 
-def test_insert_fills_graphite_then_reinsert_then_fresh():
-    zone = make_zone(20)
-    zone.num_pebbles = 20
-    zone.insert([("graphpeb", 0.25), ("reinsert", 1.0), ("fuel20", 1.0)],
-                {"reinsert_fuel20_R1Z3G2": 0.5})
-    assert zone.inventory == {"graphpeb_R1Z1G1": 5, "fuel20_R1Z1G2": 10, "fuel20_R1Z1G1": 5}
-
-
-def test_insert_truncates_reinserted_fuel_when_graphite_fraction_is_high():
-    """v1 behaviour: reinserted pebbles beyond the remaining capacity silently vanish (review #7)."""
-    zone = make_zone(20)
-    zone.num_pebbles = 20
-    zone.insert([("graphpeb", 0.9), ("reinsert", 1.0), ("fuel20", 1.0)], {"reinsert_fuel20_R1Z3G2": 0.5})
-    assert zone.inventory == {"graphpeb_R1Z1G1": 18, "fuel20_R1Z1G2": 2}
-
-
-@pytest.mark.xfail(strict=True, reason="review #7: reinsertion overflow is truncated, not conserved")
-def test_insert_conserves_reinserted_fuel():
-    zone = make_zone(20)
-    zone.num_pebbles = 20
-    zone.insert([("graphpeb", 0.9), ("reinsert", 1.0), ("fuel20", 1.0)], {"reinsert_fuel20_R1Z3G2": 0.5})
-    assert zone.inventory.get("fuel20_R1Z1G2", 0) == 10
-
-
 def test_extract_top_zone_prefixes_discharge():
     zone = make_zone(18, z=3)
     zone.initialize({"graphpeb": 0.5, "fuel20": 0.5})

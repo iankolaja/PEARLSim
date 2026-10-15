@@ -107,21 +107,6 @@ class Zone():
         self.random_assign_remaining(rng)
         return rename_map
 
-    def insert(self, insert_fracs, reinsert_inventory, rng=None):
-        self.reset()
-        rename_map = {}
-        for instruction in insert_fracs:
-            insert_name, insert_amount = instruction
-            if insert_amount == 0:
-                continue
-            if insert_name == "reinsert":
-                rename_step = self.set_fractions(reinsert_inventory)
-            else:
-                rename_step = self.set_fractions({insert_name: insert_amount})
-            rename_map.update(rename_step)
-        self.random_assign_remaining(rng)
-        return rename_map
-
     def print_status(self):
         status_s = f"Zone R{self.radial_num}Z{self.axial_num}: [{self.num_pebbles} pebble points, {sum(self.inventory.values())} assigned]\n"
         status_s += str(self.inventory)

@@ -298,180 +298,6 @@ mat graphpeb_R2Z3G1 -1.74 rgb 164 205 75  tmp 959 moder  grph 6000
 cell graphpeb_R2Z3G1_c ugraphpeb_R2Z3G1 graphpeb_R2Z3G1 -pebble_outer
 
 
-mat fuel20_R1Z1G1 sum fix 09c 959 rgb 132 235 75  tmp 959 burn 1 
-  6012.09c    0.0116911668
-  60130    0.00012530472
-  8016.09c    0.0354635
-  92235.09c    0.00466953
-  92238.09c    0.0189728
-  90227.09c    0.0
-  90228.09c    0.0
-  90229.09c    0.0
-  90230.09c    0.0
-  90232.09c    0.0
-  90233.09c    0.0
-  90234.09c    0.0
-  91231.09c    0.0
-  91232.09c    0.0
-  91233.09c    0.0
-  92232.09c    0.0
-  92233.09c    0.0
-  92234.09c    0.0
-  92236.09c    0.0
-  92237.09c    0.0
-  92239.09c    0.0
-  92240.09c    0.0
-  92241.09c    0.0
-  93235.09c    0.0
-  93236.09c    0.0
-  93237.09c    0.0
-  93238.09c    0.0
-  93239.09c    0.0
-  94236.09c    0.0
-  94237.09c    0.0
-  94238.09c    0.0
-  94239.09c    0.0
-  94240.09c    0.0
-  94241.09c    0.0
-  94242.09c    0.0
-  94243.09c    0.0
-  94244.09c    0.0
-  95241.09c    0.0
-  95242.09c    0.0
-  95342.09c    0.0
-  95243.09c    0.0
-  95244.09c    0.0
-  95344.09c    0.0
-  96240.09c    0.0
-  96241.09c    0.0
-  96242.09c    0.0
-  96243.09c    0.0
-  96244.09c    0.0
-  96245.09c    0.0
-  96246.09c    0.0
-  96247.09c    0.0
-  96248.09c    0.0
-  96249.09c    0.0
-  96250.09c    0.0
-  5011.09c    0.0
-
-mat fuel20_R1Z1G1_SiC -3.18 rgb 132 235 75 tmp 959 moder  grph 6000
-  14028.09c    0.0440455
-  14029.09c    0.00224527
-  14030.09c    0.00148092
-  6000.09c    0.0478749
-
-mat fuel20_R1Z1G1_PyC -1.9 rgb 132 235 75 tmp 959 moder  grph 6000
-  6000.09c    1.0
-
-mat fuel20_R1Z1G1_buffer -1.05 rgb 132 235 75 tmp 959 moder  grph 6000
-  6000.09c    1.0
-
-mat fuel20_R1Z1G1_matrix -1.74 rgb 132 235 75 tmp 959 moder  grph 6000
-  6000.09c    1.0
-
-particle p7
-fuel20_R1Z1G1	0.02125
-fuel20_R1Z1G1_buffer    0.031250
-fuel20_R1Z1G1_PyC    0.035250
-fuel20_R1Z1G1_SiC    0.038750
-fuel20_R1Z1G1_PyC    0.042750
-fuel20_R1Z1G1_matrix
-
-cell inf_fuel20_R1Z1G1 infU_fuel20_R1Z1G1 fuel20_R1Z1G1_matrix -infinite
-pbed trisobed7 infU_fuel20_R1Z1G1 "trisos/triso7"
-cell fuel20_R1Z1G1_c1 ufuel20_R1Z1G1 pebgraph -pebble_core_outer
-cell fuel20_R1Z1G1_c2 ufuel20_R1Z1G1 fill trisobed7 pebble_core_outer -matrix_outer
-cell fuel20_R1Z1G1_c3 ufuel20_R1Z1G1 pebshell  matrix_outer -pebble_outer
-
-
-mat fuel20_R2Z1G1 sum fix 09c 959 rgb 164 235 75  tmp 959 burn 1 
-  6012.09c    0.0116911668
-  60130    0.00012530472
-  8016.09c    0.0354635
-  92235.09c    0.00466953
-  92238.09c    0.0189728
-  90227.09c    0.0
-  90228.09c    0.0
-  90229.09c    0.0
-  90230.09c    0.0
-  90232.09c    0.0
-  90233.09c    0.0
-  90234.09c    0.0
-  91231.09c    0.0
-  91232.09c    0.0
-  91233.09c    0.0
-  92232.09c    0.0
-  92233.09c    0.0
-  92234.09c    0.0
-  92236.09c    0.0
-  92237.09c    0.0
-  92239.09c    0.0
-  92240.09c    0.0
-  92241.09c    0.0
-  93235.09c    0.0
-  93236.09c    0.0
-  93237.09c    0.0
-  93238.09c    0.0
-  93239.09c    0.0
-  94236.09c    0.0
-  94237.09c    0.0
-  94238.09c    0.0
-  94239.09c    0.0
-  94240.09c    0.0
-  94241.09c    0.0
-  94242.09c    0.0
-  94243.09c    0.0
-  94244.09c    0.0
-  95241.09c    0.0
-  95242.09c    0.0
-  95342.09c    0.0
-  95243.09c    0.0
-  95244.09c    0.0
-  95344.09c    0.0
-  96240.09c    0.0
-  96241.09c    0.0
-  96242.09c    0.0
-  96243.09c    0.0
-  96244.09c    0.0
-  96245.09c    0.0
-  96246.09c    0.0
-  96247.09c    0.0
-  96248.09c    0.0
-  96249.09c    0.0
-  96250.09c    0.0
-  5011.09c    0.0
-
-mat fuel20_R2Z1G1_SiC -3.18 rgb 164 235 75 tmp 959 moder  grph 6000
-  14028.09c    0.0440455
-  14029.09c    0.00224527
-  14030.09c    0.00148092
-  6000.09c    0.0478749
-
-mat fuel20_R2Z1G1_PyC -1.9 rgb 164 235 75 tmp 959 moder  grph 6000
-  6000.09c    1.0
-
-mat fuel20_R2Z1G1_buffer -1.05 rgb 164 235 75 tmp 959 moder  grph 6000
-  6000.09c    1.0
-
-mat fuel20_R2Z1G1_matrix -1.74 rgb 164 235 75 tmp 959 moder  grph 6000
-  6000.09c    1.0
-
-particle p8
-fuel20_R2Z1G1	0.02125
-fuel20_R2Z1G1_buffer    0.031250
-fuel20_R2Z1G1_PyC    0.035250
-fuel20_R2Z1G1_SiC    0.038750
-fuel20_R2Z1G1_PyC    0.042750
-fuel20_R2Z1G1_matrix
-
-cell inf_fuel20_R2Z1G1 infU_fuel20_R2Z1G1 fuel20_R2Z1G1_matrix -infinite
-pbed trisobed8 infU_fuel20_R2Z1G1 "trisos/triso8"
-cell fuel20_R2Z1G1_c1 ufuel20_R2Z1G1 pebgraph -pebble_core_outer
-cell fuel20_R2Z1G1_c2 ufuel20_R2Z1G1 fill trisobed8 pebble_core_outer -matrix_outer
-cell fuel20_R2Z1G1_c3 ufuel20_R2Z1G1 pebshell  matrix_outer -pebble_outer
-
-
 mat fuel20_R1Z2G1 sum fix 09c 959 rgb 132 220 75  tmp 959 burn 1 
   6012.09c    0.0116911668
   60130    0.00012530472
@@ -545,7 +371,7 @@ mat fuel20_R1Z2G1_buffer -1.05 rgb 132 220 75 tmp 959 moder  grph 6000
 mat fuel20_R1Z2G1_matrix -1.74 rgb 132 220 75 tmp 959 moder  grph 6000
   6000.09c    1.0
 
-particle p9
+particle p7
 fuel20_R1Z2G1	0.02125
 fuel20_R1Z2G1_buffer    0.031250
 fuel20_R1Z2G1_PyC    0.035250
@@ -554,9 +380,9 @@ fuel20_R1Z2G1_PyC    0.042750
 fuel20_R1Z2G1_matrix
 
 cell inf_fuel20_R1Z2G1 infU_fuel20_R1Z2G1 fuel20_R1Z2G1_matrix -infinite
-pbed trisobed9 infU_fuel20_R1Z2G1 "trisos/triso9"
+pbed trisobed7 infU_fuel20_R1Z2G1 "trisos/triso7"
 cell fuel20_R1Z2G1_c1 ufuel20_R1Z2G1 pebgraph -pebble_core_outer
-cell fuel20_R1Z2G1_c2 ufuel20_R1Z2G1 fill trisobed9 pebble_core_outer -matrix_outer
+cell fuel20_R1Z2G1_c2 ufuel20_R1Z2G1 fill trisobed7 pebble_core_outer -matrix_outer
 cell fuel20_R1Z2G1_c3 ufuel20_R1Z2G1 pebshell  matrix_outer -pebble_outer
 
 
@@ -633,7 +459,7 @@ mat fuel20_R2Z2G1_buffer -1.05 rgb 164 220 75 tmp 959 moder  grph 6000
 mat fuel20_R2Z2G1_matrix -1.74 rgb 164 220 75 tmp 959 moder  grph 6000
   6000.09c    1.0
 
-particle p10
+particle p8
 fuel20_R2Z2G1	0.02125
 fuel20_R2Z2G1_buffer    0.031250
 fuel20_R2Z2G1_PyC    0.035250
@@ -642,9 +468,9 @@ fuel20_R2Z2G1_PyC    0.042750
 fuel20_R2Z2G1_matrix
 
 cell inf_fuel20_R2Z2G1 infU_fuel20_R2Z2G1 fuel20_R2Z2G1_matrix -infinite
-pbed trisobed10 infU_fuel20_R2Z2G1 "trisos/triso10"
+pbed trisobed8 infU_fuel20_R2Z2G1 "trisos/triso8"
 cell fuel20_R2Z2G1_c1 ufuel20_R2Z2G1 pebgraph -pebble_core_outer
-cell fuel20_R2Z2G1_c2 ufuel20_R2Z2G1 fill trisobed10 pebble_core_outer -matrix_outer
+cell fuel20_R2Z2G1_c2 ufuel20_R2Z2G1 fill trisobed8 pebble_core_outer -matrix_outer
 cell fuel20_R2Z2G1_c3 ufuel20_R2Z2G1 pebshell  matrix_outer -pebble_outer
 
 
@@ -721,7 +547,7 @@ mat fuel20_R1Z3G1_buffer -1.05 rgb 132 205 75 tmp 959 moder  grph 6000
 mat fuel20_R1Z3G1_matrix -1.74 rgb 132 205 75 tmp 959 moder  grph 6000
   6000.09c    1.0
 
-particle p11
+particle p9
 fuel20_R1Z3G1	0.02125
 fuel20_R1Z3G1_buffer    0.031250
 fuel20_R1Z3G1_PyC    0.035250
@@ -730,9 +556,9 @@ fuel20_R1Z3G1_PyC    0.042750
 fuel20_R1Z3G1_matrix
 
 cell inf_fuel20_R1Z3G1 infU_fuel20_R1Z3G1 fuel20_R1Z3G1_matrix -infinite
-pbed trisobed11 infU_fuel20_R1Z3G1 "trisos/triso11"
+pbed trisobed9 infU_fuel20_R1Z3G1 "trisos/triso9"
 cell fuel20_R1Z3G1_c1 ufuel20_R1Z3G1 pebgraph -pebble_core_outer
-cell fuel20_R1Z3G1_c2 ufuel20_R1Z3G1 fill trisobed11 pebble_core_outer -matrix_outer
+cell fuel20_R1Z3G1_c2 ufuel20_R1Z3G1 fill trisobed9 pebble_core_outer -matrix_outer
 cell fuel20_R1Z3G1_c3 ufuel20_R1Z3G1 pebshell  matrix_outer -pebble_outer
 
 
@@ -809,7 +635,7 @@ mat fuel20_R2Z3G1_buffer -1.05 rgb 164 205 75 tmp 959 moder  grph 6000
 mat fuel20_R2Z3G1_matrix -1.74 rgb 164 205 75 tmp 959 moder  grph 6000
   6000.09c    1.0
 
-particle p12
+particle p10
 fuel20_R2Z3G1	0.02125
 fuel20_R2Z3G1_buffer    0.031250
 fuel20_R2Z3G1_PyC    0.035250
@@ -818,9 +644,9 @@ fuel20_R2Z3G1_PyC    0.042750
 fuel20_R2Z3G1_matrix
 
 cell inf_fuel20_R2Z3G1 infU_fuel20_R2Z3G1 fuel20_R2Z3G1_matrix -infinite
-pbed trisobed12 infU_fuel20_R2Z3G1 "trisos/triso12"
+pbed trisobed10 infU_fuel20_R2Z3G1 "trisos/triso10"
 cell fuel20_R2Z3G1_c1 ufuel20_R2Z3G1 pebgraph -pebble_core_outer
-cell fuel20_R2Z3G1_c2 ufuel20_R2Z3G1 fill trisobed12 pebble_core_outer -matrix_outer
+cell fuel20_R2Z3G1_c2 ufuel20_R2Z3G1 fill trisobed10 pebble_core_outer -matrix_outer
 cell fuel20_R2Z3G1_c3 ufuel20_R2Z3G1 pebshell  matrix_outer -pebble_outer
 
 
@@ -897,7 +723,7 @@ mat fuel20_R1Z1G2_buffer -1.05 rgb 132 235 150 tmp 959.0 moder  grph 6000
 mat fuel20_R1Z1G2_matrix -1.74 rgb 132 235 150 tmp 959.0 moder  grph 6000
   6000.09c    1.0
 
-particle p13
+particle p11
 fuel20_R1Z1G2	0.02125
 fuel20_R1Z1G2_buffer    0.031250
 fuel20_R1Z1G2_PyC    0.035250
@@ -906,9 +732,9 @@ fuel20_R1Z1G2_PyC    0.042750
 fuel20_R1Z1G2_matrix
 
 cell inf_fuel20_R1Z1G2 infU_fuel20_R1Z1G2 fuel20_R1Z1G2_matrix -infinite
-pbed trisobed13 infU_fuel20_R1Z1G2 "trisos/triso13"
+pbed trisobed11 infU_fuel20_R1Z1G2 "trisos/triso11"
 cell fuel20_R1Z1G2_c1 ufuel20_R1Z1G2 pebgraph -pebble_core_outer
-cell fuel20_R1Z1G2_c2 ufuel20_R1Z1G2 fill trisobed13 pebble_core_outer -matrix_outer
+cell fuel20_R1Z1G2_c2 ufuel20_R1Z1G2 fill trisobed11 pebble_core_outer -matrix_outer
 cell fuel20_R1Z1G2_c3 ufuel20_R1Z1G2 pebshell  matrix_outer -pebble_outer
 
 
@@ -985,7 +811,7 @@ mat fuel20_R1Z1G3_buffer -1.05 rgb 132 235 225 tmp 959.0 moder  grph 6000
 mat fuel20_R1Z1G3_matrix -1.74 rgb 132 235 225 tmp 959.0 moder  grph 6000
   6000.09c    1.0
 
-particle p14
+particle p12
 fuel20_R1Z1G3	0.02125
 fuel20_R1Z1G3_buffer    0.031250
 fuel20_R1Z1G3_PyC    0.035250
@@ -994,9 +820,9 @@ fuel20_R1Z1G3_PyC    0.042750
 fuel20_R1Z1G3_matrix
 
 cell inf_fuel20_R1Z1G3 infU_fuel20_R1Z1G3 fuel20_R1Z1G3_matrix -infinite
-pbed trisobed14 infU_fuel20_R1Z1G3 "trisos/triso14"
+pbed trisobed12 infU_fuel20_R1Z1G3 "trisos/triso12"
 cell fuel20_R1Z1G3_c1 ufuel20_R1Z1G3 pebgraph -pebble_core_outer
-cell fuel20_R1Z1G3_c2 ufuel20_R1Z1G3 fill trisobed14 pebble_core_outer -matrix_outer
+cell fuel20_R1Z1G3_c2 ufuel20_R1Z1G3 fill trisobed12 pebble_core_outer -matrix_outer
 cell fuel20_R1Z1G3_c3 ufuel20_R1Z1G3 pebshell  matrix_outer -pebble_outer
 
 
@@ -1073,7 +899,7 @@ mat fuel20_R2Z1G2_buffer -1.05 rgb 164 235 150 tmp 959.0 moder  grph 6000
 mat fuel20_R2Z1G2_matrix -1.74 rgb 164 235 150 tmp 959.0 moder  grph 6000
   6000.09c    1.0
 
-particle p15
+particle p13
 fuel20_R2Z1G2	0.02125
 fuel20_R2Z1G2_buffer    0.031250
 fuel20_R2Z1G2_PyC    0.035250
@@ -1082,9 +908,9 @@ fuel20_R2Z1G2_PyC    0.042750
 fuel20_R2Z1G2_matrix
 
 cell inf_fuel20_R2Z1G2 infU_fuel20_R2Z1G2 fuel20_R2Z1G2_matrix -infinite
-pbed trisobed15 infU_fuel20_R2Z1G2 "trisos/triso15"
+pbed trisobed13 infU_fuel20_R2Z1G2 "trisos/triso13"
 cell fuel20_R2Z1G2_c1 ufuel20_R2Z1G2 pebgraph -pebble_core_outer
-cell fuel20_R2Z1G2_c2 ufuel20_R2Z1G2 fill trisobed15 pebble_core_outer -matrix_outer
+cell fuel20_R2Z1G2_c2 ufuel20_R2Z1G2 fill trisobed13 pebble_core_outer -matrix_outer
 cell fuel20_R2Z1G2_c3 ufuel20_R2Z1G2 pebshell  matrix_outer -pebble_outer
 
 
@@ -1161,7 +987,7 @@ mat fuel20_R2Z1G3_buffer -1.05 rgb 164 235 225 tmp 959.0 moder  grph 6000
 mat fuel20_R2Z1G3_matrix -1.74 rgb 164 235 225 tmp 959.0 moder  grph 6000
   6000.09c    1.0
 
-particle p16
+particle p14
 fuel20_R2Z1G3	0.02125
 fuel20_R2Z1G3_buffer    0.031250
 fuel20_R2Z1G3_PyC    0.035250
@@ -1170,9 +996,9 @@ fuel20_R2Z1G3_PyC    0.042750
 fuel20_R2Z1G3_matrix
 
 cell inf_fuel20_R2Z1G3 infU_fuel20_R2Z1G3 fuel20_R2Z1G3_matrix -infinite
-pbed trisobed16 infU_fuel20_R2Z1G3 "trisos/triso16"
+pbed trisobed14 infU_fuel20_R2Z1G3 "trisos/triso14"
 cell fuel20_R2Z1G3_c1 ufuel20_R2Z1G3 pebgraph -pebble_core_outer
-cell fuel20_R2Z1G3_c2 ufuel20_R2Z1G3 fill trisobed16 pebble_core_outer -matrix_outer
+cell fuel20_R2Z1G3_c2 ufuel20_R2Z1G3 fill trisobed14 pebble_core_outer -matrix_outer
 cell fuel20_R2Z1G3_c3 ufuel20_R2Z1G3 pebshell  matrix_outer -pebble_outer
 
 
@@ -1181,13 +1007,11 @@ cell fuel20_R2Z1G3_c3 ufuel20_R2Z1G3 pebshell  matrix_outer -pebble_outer
 %%%%%%%% Volume Definitions 
 
 set mvol
-  fuel20_R1Z1G2 1 1.45053504E+00
+  fuel20_R1Z1G2 1 1.81316880E+00
   fuel20_R1Z1G3 1 1.45053504E+00
-  fuel20_R1Z1G1 1 3.6263376E-01
   fuel20_R1Z2G1 1 3.26370384E+00
   fuel20_R1Z3G1 1 3.26370384E+00
   fuel20_R2Z1G2 1 1.45053504E+00
-  fuel20_R2Z1G3 1 1.45053504E+00
-  fuel20_R2Z1G1 1 3.6263376E-01
+  fuel20_R2Z1G3 1 1.81316880E+00
   fuel20_R2Z2G1 1 3.26370384E+00
   fuel20_R2Z3G1 1 3.26370384E+00

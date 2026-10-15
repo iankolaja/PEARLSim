@@ -1,0 +1,37 @@
+name: v1_lstm
+data:
+  source: v1_directory
+  path: sequence_data
+split:
+  mode: families
+  seed: 2026
+  test_families:
+    - gFHR_ascension_graphite_1
+    - gFHR_ascension_graphite_5
+    - gFHR_ascension_power_1
+    - gFHR_automated_5
+    - gFHR_automated_6
+    - gFHR_forecast_base
+    - gFHR_random_19
+    - gFHR_random_4
+    - gFHR_runin_graphite_2
+    - gFHR_runin_power_3
+    - gFHR_sequence
+    - gFHR_sequence3
+    - gFHR_sequence5
+    - gFHR_sequence8
+weighting:
+  band_pcm: 5000
+  outside_weight: 0.1
+model:
+  type: lstm
+  params:
+    sizes: [256, 128]
+    dropout: 0.1
+    head_hidden: [64]
+  train:
+    learning_rate: 0.01
+    batch_size: 1024
+    max_epochs: 500
+    patience: 25
+    weight_decay: 1.0e-5

@@ -1,0 +1,18 @@
+#!/bin/sh
+# Train one ML experiment (CPU) as a low-priority, requeueable job:
+#   sbatch --export=ALL,CONFIG=experiments/v1_lstm.yaml experiments/run_experiment.sub
+# Training restarts from the beginning if the job is preempted and requeued.
+#SBATCH --job-name=pearlsim_ml
+#SBATCH --output=slurm_ml_%j.out
+#SBATCH --partition=savio4_htc
+#SBATCH --time=24:00:00
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=8
+#SBATCH --qos=savio_lowprio
+#SBATCH -A co_nuclear
+#SBATCH --requeue
+
+export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
+export MPLBACKEND=Agg
+~/envs/pearlsim/bin/python -m pearlsim.ml.experiment "$CONFIG"

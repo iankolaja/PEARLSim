@@ -1,17 +1,37 @@
+"""Keyword-deck driver for PEARLSim simulations.
+
+An input deck is a sequence of keyword lines (``#`` starts a comment). Each
+keyword maps to a ``_kw_<name>`` handler; unknown keywords are logged and
+ignored. Paths in a deck are relative to the directory containing the deck:
+``read_input_file`` changes into a run directory one level below it, so the
+handlers resolve input paths as ``"../" + path``.
+"""
+
+import logging
+import os
 import pickle
 import random
+import shlex
+import subprocess
 
+import numpy as np
+import pandas as pd
 
 from pearlsim.core import Core
 from pearlsim.material import Material
-import numpy as np
-import pandas as pd
-import os
-import json
+
+logger = logging.getLogger(__name__)
 
 
+class SerpentError(RuntimeError):
+    """Serpent exited with an error or did not produce the expected outputs."""
 
-class Simulation():
+
+class DeckError(ValueError):
+    """An input-deck line could not be interpreted."""
+
+
+class Simulation:
     def __init__(self, simulation_name):
         self.simulation_name = simulation_name
         self.core = Core(simulation_name)
@@ -20,347 +40,259 @@ class Simulation():
         self.days = 0
         self.power = 280e6
         self.serpent_command = "sss2_HxF_dev"
-        self.rod_insertion = 429.469 # Practically fully removed
-        self.burnup_time_step = 6.525 # days
+        self.rod_insertion = 429.469  # practically fully withdrawn
+        self.burnup_time_step = 6.525  # days
         self.fima_discharge_threshold = 17
         self.fima_discharge_rel_std = 0.02576
         self.debug = 0
         self.serpent_settings = {"pop": "10000 50 25"}
+
+    # ------------------------------------------------------------------ deck parsing
 
     def get_zone_model_materials(self):
         return self.core.materials
 
     def get_zone_model_pebble_locations(self):
         return self.core.pebble_locations
-    
+
     def read_input_file(self, input_file, directory_name=None):
         if directory_name is None:
-            directory_name = input_file.split("/")[-1].split(".")[0]
-        with open(input_file, 'r') as f:
-            try:
-                os.chdir(directory_name)
-            except:
-                os.mkdir(directory_name)
-                os.chdir(directory_name)
-            for line in f:
-                self.read_input_line(line)
+            directory_name = os.path.splitext(os.path.basename(input_file))[0]
+        with open(input_file) as f:
+            lines = f.readlines()
+        os.makedirs(directory_name, exist_ok=True)
+        os.chdir(directory_name)
+        for line in lines:
+            self.read_input_line(line)
 
     def read_input_line(self, raw_line):
-        line = raw_line.split("#")[0] # Ignore comments
-        line = line.split(" ")
-        keyword = line[0]
+        tokens = raw_line.split("#", 1)[0].split()
+        if not tokens:
+            return
+        keyword, args = tokens[0], tokens[1:]
+        handler = getattr(self, f"_kw_{keyword}", None)
+        if handler is None:
+            logger.warning("Unknown keyword %r ignored", keyword)
+            return
+        try:
+            handler(args)
+        except (IndexError, ValueError) as error:
+            raise DeckError(f"Invalid deck line {raw_line.strip()!r}: {error}") from error
 
-        if keyword == "restart":
-            try:
-                self.core = pickle.load("../"+line[1])
-            except:
-                print(f"Failed to load {line[1]}. Does the file exist?")
+    # ------------------------------------------------------------------ keyword handlers
 
-        if keyword == "fresh":
-            fresh_definitions = line[1:]
-            num_definitions = int(len(fresh_definitions) / 2)
-            for i in range(num_definitions):
-                key = fresh_definitions[i * 2]
-                file_path = fresh_definitions[i * 2 + 1].replace("\n","")
-                self.core.fresh_pebbles[key] = Material(key, "../"+file_path)
+    def _kw_restart(self, args):
+        with open("../" + args[0], "rb") as f:
+            self.core = pickle.load(f)
+        logger.info("Restarted core from %s", args[0])
 
-        if keyword == "triso_file":
-            num_copies = int(line[1])
-            file_path = line[2].replace("\n", "")
-            try:
-                triso_data = pd.read_csv("../"+file_path, sep=" ", names=["x", "y", "z", "r", "id"])
-                if not os.path.exists("trisos"):
-                    os.mkdir("trisos")
-                    for i in range(1, 1 + num_copies):
-                        triso_data["id"] = f"p{i}"
-                        triso_data.to_csv(f"trisos/triso{i}", sep=" ", header=False, index=False)
-            except:
-                print(f"Failed to load {line[1]}. Does the file exist?")
+    def _kw_fresh(self, args):
+        for key, path in _pairs(args):
+            self.core.fresh_pebbles[key] = Material(key, "../" + path)
 
-        if keyword == "static_fuel_materials":
-            static_definitions = line[1:]
-            num_definitions = int(len(static_definitions) / 2)
-            for i in range(num_definitions):
-                key = static_definitions[i * 2]
-                file_path = static_definitions[i * 2 + 1].replace("\n","")
-                self.core.static_fuel_materials[key] = Material(key, "../"+file_path)
+    def _kw_triso_file(self, args):
+        num_copies, path = int(args[0]), args[1]
+        triso_data = pd.read_csv("../" + path, sep=" ", names=["x", "y", "z", "r", "id"])
+        if not os.path.exists("trisos"):
+            os.mkdir("trisos")
+            for i in range(1, 1 + num_copies):
+                triso_data["id"] = f"p{i}"
+                triso_data.to_csv(f"trisos/triso{i}", sep=" ", header=False, index=False)
 
+    def _kw_static_fuel_materials(self, args):
+        for key, path in _pairs(args):
+            self.core.static_fuel_materials[key] = Material(key, "../" + path)
 
-        if keyword == "set_seed":
-            try:
-                print(f"Set random seed to {line[1]}")
-                random.seed(int(line[1]))
-                np.random.seed(int(line[1]))
-            except:
-                print(f"Failed to seed random number generator.")
+    def _kw_set_seed(self, args):
+        seed = int(args[0])
+        random.seed(seed)
+        np.random.seed(seed)
+        logger.info("Set random seed to %d", seed)
 
-        if keyword == "set_substep_schema":
-            values = line[1:]
-            for i in range(len(values)):
-                values[i] = float(values[i].replace("\n",""))
-            print(f"Set substep schema to {values}")
-            self.core.substep_schema = values
+    def _kw_set_substep_schema(self, args):
+        self.core.substep_schema = [float(v) for v in args]
 
+    def _kw_debug_level(self, args):
+        self.debug = int(args[0])
 
-        if keyword == "debug_level":
-            try:
-                self.debug = int(line[1])
-                print(f"Set debug level to {int(line[1])}")
-            except:
-                print(f"Invalid debug input.")
+    def _kw_define_zones(self, args):
+        self.core.define_zones("../" + args[0], "../" + args[1], debug=self.debug)
 
-        if keyword == "define_zones":
-            file_path = line[1].replace("\n", "")
-            pebble_path = line[2].replace("\n", "")
-            #try:
-            self.core.define_zones("../"+file_path, "../"+pebble_path, debug=self.debug)
-            #except:
-            #    print(f"Failed to define zones from {file_path}. Is the file valid?")
+    def _kw_core_geometry(self, args):
+        path = args[0].replace('"', "")
+        with open("../" + path) as f:
+            self.core.core_geometry = f.read()
 
-        if keyword == "core_geometry":
-            file_path = line[1].replace("\n", "").replace('\"','')
-            try:
-                with open("../"+file_path, 'r') as f:
-                    self.core.core_geometry = f.read()
-                print(f"Loaded {file_path} core geometry.")
-            except:
-                    print(f"Failed to load {file_path}. Does the file exist?")
+    def _kw_initialize(self, args):
+        # args[0] was the number of individually modelled pebbles (removed pebble model)
+        insertion_ratios = {key: float(value) for key, value in _pairs(args[1:])}
+        for channel in self.core.zones:
+            for zone in channel:
+                zone.initialize(insertion_ratios, debug=self.debug)
+                self.core.initialize_materials(zone.inventory)
 
-                
-        if keyword == "initialize":
-            num_pebbles = int(line[1])
-            fuel_ratios = line[2:]
-            num_definitions = int(len(fuel_ratios)/2)
-            insertion_ratios = {}
-            for i in range(num_definitions):
-                insertion_ratios[fuel_ratios[i*2]] = float(fuel_ratios[i*2+1])
-            for r in range(len(self.core.zones)):
-                for zone in self.core.zones[r]:
-                    zone.initialize(insertion_ratios, debug=self.debug)
-                    self.core.initialize_materials(zone.inventory)
-                    print(f"Initialized zone R{zone.radial_num}Z{zone.axial_num}")
-            print("Finished initializing zones.")
+    def _kw_insertion(self, args):
+        num_steps = int(args[0])
+        get_boolean(args[1])  # thermal-coupling flag; not implemented
+        serpent_flag = int(args[2])
+        insertion_ratios, insertion_dict = get_insertion_ratio_pairs(args[3:])
+        for _ in range(num_steps):
+            self.core.insert(insertion_ratios, self.fima_discharge_threshold,
+                             self.fima_discharge_rel_std, debug=self.debug)
+            self.run_step(serpent_flag, insertion_dict.get("graphpeb", 0.0))
 
+    def _kw_transport(self, args):
+        serpent_flag = int(args[0])
+        last_step = len(self.core.substep_schema)
+        if serpent_flag == 1:
+            self.run_step(1, "static")
+        elif serpent_flag == 2:
+            self.core.update_from_bumat(self.debug, step=last_step)
+            self.days += self.burnup_time_step
+            self.core.iteration += 1
+        elif serpent_flag == 3:
+            self.core.update_from_bumat(self.debug, step=last_step)
+            self.days += self.burnup_time_step
+            self.core.generate_input(self.serpent_settings, self.burnup_time_step, self.debug,
+                                     cr_position=self.rod_insertion)
+            self.core.save_zone_maps(f"zone_map{self.core.iteration}.json")
+            self.core.iteration += 1
+        else:
+            raise ValueError(f"unknown transport flag {serpent_flag}")
 
-        if keyword == "insertion":
-            num_steps = int(line[1])
-            couple_flag = get_boolean(line[2])
-            serpent_flag = int(line[3]) # 0 for no serpent, 1 to run serpent, 2 to use serpent results that already exist
-            insertion_ratios, insertion_dict = get_insertion_ratio_pairs(line[4:])
-            last_step = len(self.core.substep_schema)
-            for step in range(num_steps):
-                self.core.insert(insertion_ratios, self.fima_discharge_threshold,
-                    self.fima_discharge_rel_std, debug=self.debug)
+    def _kw_set_averaging_mode(self, args):
+        if args[0] not in ("pass", "burnup"):
+            raise ValueError(f"averaging mode must be 'pass' or 'burnup', not {args[0]!r}")
+        self.core.averaging_mode = args[0]
 
-                
-                bumat_name = f"{self.simulation_name}_{self.core.iteration}.serpent.bumat{last_step}"
-                zone_file_name = f"zone_map{self.core.iteration}.json"
-                
-                # If Serpent mode 2 is on, check to see if results for the step
-                # already do, and skip it if so.
-                if os.path.isfile(bumat_name) and serpent_flag == 2:
-                    print(f"{bumat_name} file already exists. Skipping iteration.")
-                    self.core.update_from_bumat(self.debug, step=last_step)
-                    self.core.iteration += 1
-                    operating_parameters = {"power": self.serpent_settings['power'],
-                                            "burnup_step": self.burnup_time_step,
-                                            "graphite_insertion_fraction": insertion_dict["graphpeb"], 
-                                            "control_rod_position": self.rod_insertion,
-                                            "fima_discharge_threshold": self.fima_discharge_threshold,
-                                            "fima_discharge_rel_std": self.fima_discharge_rel_std
-                                            
-                    }
-                    file_name = f"{self.core.simulation_name}_operating_{self.core.iteration}.json"
-                    self.core.save_operating_parameters(file_name, operating_parameters)
-                elif os.path.isfile(zone_file_name) and serpent_flag == 0:
-                    print(f"{zone_file_name} file already exists. Skipping iteration.")
-                    self.core.iteration += 1
-                elif serpent_flag == 0:
-                    self.core.save_zone_maps(f"zone_map{self.core.iteration}.json")
-                    self.core.save_all_materials(f"core_materials_{self.core.iteration}.json.gz")
-                    self.core.iteration += 1
-                else:
-                    input_name = self.core.generate_input(self.serpent_settings,
-                                                          self.burnup_time_step,
-                                                          self.debug,
-                                                          cr_position=self.rod_insertion)
-                    operating_parameters = {"power": self.serpent_settings['power'],
-                                            "burnup_step": self.burnup_time_step,
-                                            "graphite_insertion_fraction": insertion_dict["graphpeb"], 
-                                            "control_rod_position": self.rod_insertion,
-                                            "fima_discharge_threshold": self.fima_discharge_threshold,
-                                            "fima_discharge_rel_std": self.fima_discharge_rel_std
-                                            
-                    }
-                    file_name = f"{self.core.simulation_name}_operating_{self.core.iteration}.json"
-                    self.core.save_operating_parameters(file_name, operating_parameters)
-                    
+    def _kw_set_rod_depth(self, args):
+        self.rod_insertion = float(args[0])
 
+    def _kw_set_discharge_threshold(self, args):
+        self.fima_discharge_threshold = float(args[0])
 
-                    
-                    self.run_serpent(input_name)
-                    self.core.save_zone_maps(zone_file_name)
-                    self.core.save_all_materials(f"core_materials_{self.core.iteration}.json.gz")
-                    
-                    self.core.update_from_bumat(self.debug, step=last_step)
-                    self.days += self.burnup_time_step
-                    self.core.iteration += 1
+    def _kw_set_threshold_rel_std(self, args):
+        self.fima_discharge_rel_std = float(args[0])
 
+    def _kw_set_num_fuel_groups(self, args):
+        self.core.fuel_groups = int(args[0])
 
-        if keyword == "set_averaging_mode":
-            mode = line[1].replace("\n","")
-            if mode == "pass":
-                self.core.averaging_mode = "pass"
-                print("Top zone averaging mode set to pass.")
-            elif mode == "burnup":
-                self.core.averaging_mode = "burnup"
-                print("Top zone averaging mode set to burnup.")
+    def _kw_set_burnup_time_step(self, args):
+        self.burnup_time_step = float(args[0])
 
-        if keyword == "set_rod_depth":
-            self.rod_insertion = float(line[1].replace("\n",""))
-            print(f"Set insertion depth to {self.rod_insertion}.")
+    def _kw_set_power(self, args):
+        self.power = float(args[0])
+        self.serpent_settings["power"] = args[0]
 
-        if keyword == "set_discharge_threshold":
-            self.fima_discharge_threshold = float(line[1].replace("\n",""))
-            print(f"Set discharge fima to {self.fima_discharge_threshold}.")
+    _kw_power = _kw_set_power
 
-        if keyword == "set_threshold_rel_std":
-            self.fima_discharge_rel_std = float(line[1].replace("\n",""))
-            print(f"Set discharge fima to {self.fima_discharge_rel_std}.")
+    def _kw_set_max_passes(self, args):
+        self.core.max_passes = int(args[0])
 
-        if keyword == "set_num_fuel_groups":
-            self.core.fuel_groups = int(line[1].replace("\n",""))
-            print(f"Set number of fuel groups for averaging to {self.core.fuel_groups}.")
+    def _kw_load_from_step(self, args):
+        self.load_from_step(int(args[0]), int(args[1]) if len(args) > 1 else 0)
 
-        if keyword == "set_burnup_time_step":
-            value = line[1].replace("\n","")
-            self.burnup_time_step = float(value)
-            print(f"Set burnup time step to {value} days.")
-            
-        if keyword in ["power", "set_power"]:
-            value = line[1].replace("\n","")
-            self.power = value
-            self.serpent_settings['power'] = value
-            print(f"Set power to {value}W.")
-            
+    def _kw_save(self, args):
+        with open(f"{self.simulation_name}_core.pkl", "wb") as f:
+            pickle.dump(self.core, f)
+        with open(f"{self.simulation_name}_simulation.pkl", "wb") as f:
+            pickle.dump(self, f)
 
-        if keyword == "set_max_passes":
-            try:
-                self.core.max_passes = int(line[1].replace("\n",""))
-                print(f"Set maximum number of passes to {self.core.max_passes}.")
-            except:
-                print("Invalid maximum number of passes provided.")
+    def _kw_set(self, args):
+        setting, value = args[0], " ".join(args[1:])
+        if value == "clear":
+            self.serpent_settings.pop(setting, None)
+            return
+        self.serpent_settings[setting] = value
+        if setting == "power":
+            self.power = float(value)
 
-        if keyword == "load_from_step":
-            load_iteration = int(line[1])
-            if len(line) > 2:
-                burnup_step = int(line[2])
+    # ------------------------------------------------------------------ steps
+
+    def operating_parameters(self, graphite_insertion_fraction):
+        return {"power": float(self.power),
+                "burnup_step": self.burnup_time_step,
+                "graphite_insertion_fraction": graphite_insertion_fraction,
+                "control_rod_position": self.rod_insertion,
+                "fima_discharge_threshold": self.fima_discharge_threshold,
+                "fima_discharge_rel_std": self.fima_discharge_rel_std}
+
+    def run_step(self, serpent_flag, graphite_insertion_fraction):
+        """Advance one depletion step after the core inventory has been updated.
+
+        serpent_flag: 0 = bookkeeping only (no Serpent); 1 = run Serpent;
+        2 = reuse existing Serpent results for this step if present, otherwise run.
+        """
+        iteration = self.core.iteration
+        last_step = len(self.core.substep_schema)
+        bumat_name = f"{self.simulation_name}_{iteration}.serpent.bumat{last_step}"
+        zone_file_name = f"zone_map{iteration}.json"
+        operating_file = f"{self.core.simulation_name}_operating_{iteration}.json"
+
+        if serpent_flag == 0:
+            if os.path.isfile(zone_file_name):
+                logger.info("%s exists; skipping step %d", zone_file_name, iteration)
             else:
-                burnup_step = 0
-            self.load_from_step(load_iteration, burnup_step)
-
-
-        if keyword == "save":
-            core_file = f"{self.simulation_name}_core.pkl"
-            simulation_file = f"{self.simulation_name}_simulation.pkl"
-            
-            core_data = pickle.dumps(self.core)
-            with open(core_file, 'wb') as f:
-                f.write(core_data)
-                
-            simulation_data = pickle.dumps(self)
-            with open(simulation_file, 'wb') as f:
-                f.write(simulation_data)
-            
-
-
-        if keyword == "transport":
-            serpent_flag = int(line[1]) # 0 for no serpent, 1 to run serpent, 2 to use serpent results that already exist
-            last_step = len(self.core.substep_schema)
-            if serpent_flag == 1:
-                input_name = self.core.generate_input(self.serpent_settings,
-                                                      self.burnup_time_step,
-                                                      self.debug,
-                                                      cr_position=self.rod_insertion)
-                operating_parameters = {"power": self.serpent_settings['power'],
-                                        "burnup_step": self.burnup_time_step,
-                                        "graphite_insertion_fraction": "static", 
-                                        "control_rod_position": self.rod_insertion,
-                                        "fima_discharge_threshold": self.fima_discharge_threshold,
-                                        "fima_discharge_rel_std": self.fima_discharge_rel_std
-                                        
-                }
-                file_name = f"{self.core.simulation_name}_operating_{self.core.iteration}.json"
-                self.core.save_operating_parameters(file_name, operating_parameters)
-                self.run_serpent(input_name)
-                self.core.save_zone_maps(f"zone_map{self.core.iteration}.json")
-                self.core.save_all_materials(f"core_materials_{self.core.iteration}.json.gz")
-                self.core.update_from_bumat(self.debug, step=last_step)
-                self.days += self.burnup_time_step
-                self.core.iteration += 1
-            elif serpent_flag == 2:
-                self.core.update_from_bumat(self.debug, step=last_step)
-                self.days += self.burnup_time_step
-                self.core.iteration += 1
-            elif serpent_flag == 3:
-                self.core.update_from_bumat(self.debug, step=last_step)
-                self.days += self.burnup_time_step
-                input_name = self.core.generate_input(self.serpent_settings,
-                                                      self.burnup_time_step,
-                                                      self.debug,
-                                                      cr_position=self.rod_insertion)
-                self.core.save_zone_maps(f"zone_map{self.core.iteration}.json")
-                self.core.iteration += 1
-
-        if keyword == "set":
-            setting = line[1]
-            value = raw_line.split(setting)[1].replace("\n","")
-            if value == "clear":
-                self.serpent_settings.pop(setting)
-            else:
-                self.serpent_settings[setting] = value
-            if setting == "power":
-                self.power = value
+                self.core.save_zone_maps(zone_file_name)
+                self.core.save_all_materials(f"core_materials_{iteration}.json.gz")
+            self.core.iteration += 1
+            return
+        if serpent_flag == 2 and os.path.isfile(bumat_name):
+            logger.info("%s exists; reusing Serpent results for step %d", bumat_name, iteration)
+            self.core.save_operating_parameters(operating_file,
+                                                self.operating_parameters(graphite_insertion_fraction))
+        elif serpent_flag in (1, 2):
+            input_name = self.core.generate_input(self.serpent_settings, self.burnup_time_step, self.debug,
+                                                  cr_position=self.rod_insertion)
+            self.core.save_operating_parameters(operating_file,
+                                                self.operating_parameters(graphite_insertion_fraction))
+            self.run_serpent(input_name)
+            if not os.path.isfile(bumat_name):
+                raise SerpentError(f"Serpent finished without writing {bumat_name}")
+            self.core.save_zone_maps(zone_file_name)
+            self.core.save_all_materials(f"core_materials_{iteration}.json.gz")
+        else:
+            raise ValueError(f"unknown Serpent flag {serpent_flag}")
+        self.core.update_from_bumat(self.debug, step=last_step)
+        self.days += self.burnup_time_step
+        self.core.iteration += 1
 
     def load_from_step(self, load_iteration, burnup_step, debug=0):
-        for r in range(len(self.core.zones)):
-            for zone in self.core.zones[r]:
-                zone.initialize({"graphpeb":1}, debug=self.debug)
+        for channel in self.core.zones:
+            for zone in channel:
+                zone.initialize({"graphpeb": 1}, debug=self.debug)
         self.core.iteration = load_iteration
         self.core.load_zone_maps(f"zone_map{load_iteration}.json")
         self.core.load_pebble_locations(f"pebble_positions_{load_iteration}.csv", debug=self.debug)
         self.core.update_from_bumat(self.debug, iteration=load_iteration, step=burnup_step)
-        if debug > 1:
-            print("Loaded materials:")
-            print(self.core.materials.keys())
-            print("Zone status:")
-            for r in range(len(self.core.zones)):
-                for zone in self.core.zones[r]:
-                    zone.print_status()
 
     def run_serpent(self, input_name):
+        command = shlex.split(self.serpent_command)
         if self.num_nodes > 1:
-            print(f"Running with {self.num_nodes} nodes.")
-            os.system(f"mpirun -np {self.num_nodes} --map-by ppr:1:node:pe={self.cpu_cores}"
-                      f" {self.serpent_command} -omp {self.cpu_cores} {input_name}")
+            command = (["mpirun", "-np", str(self.num_nodes), "--map-by", f"ppr:1:node:pe={self.cpu_cores}"]
+                       + command + ["-omp", str(self.cpu_cores), input_name])
         else:
-            print(f"Running with {self.cpu_cores} cores.")
-            os.system(f"{self.serpent_command} {input_name} -omp {self.cpu_cores}")
+            command = command + [input_name, "-omp", str(self.cpu_cores)]
+        logger.info("Running %s", " ".join(command))
+        result = subprocess.run(command)
+        if result.returncode != 0:
+            raise SerpentError(f"{' '.join(command)} exited with status {result.returncode}")
+
+
+def _pairs(tokens):
+    if len(tokens) % 2:
+        raise ValueError(f"expected name/value pairs, got {tokens}")
+    return list(zip(tokens[0::2], tokens[1::2]))
+
 
 def get_boolean(input_argument):
-    input_argument = input_argument.replace("\n","")
-    if input_argument in ["1", "true", "True", "yes", "Yes", "on"]:
+    if input_argument in ("1", "true", "True", "yes", "Yes", "on"):
         return True
-    elif input_argument in ["0", "false", "False", "no", "No", "off"]:
+    if input_argument in ("0", "false", "False", "no", "No", "off"):
         return False
-    else:
-        raise TypeError("Invalid flag value provided.")
+    raise ValueError(f"invalid flag value {input_argument!r}")
+
 
 def get_insertion_ratio_pairs(list_of_definitions):
-    num_definitions = int(len(list_of_definitions) / 2)
-    insertion_ratio_pairs = []
-    insertion_ratio_dict = {}
-    for i in range(num_definitions):
-        insertion_ratio_pairs += [(list_of_definitions[i * 2], float(list_of_definitions[i * 2 + 1]))]
-        insertion_ratio_dict[list_of_definitions[i * 2]] = float(list_of_definitions[i * 2 + 1])
-    return insertion_ratio_pairs, insertion_ratio_dict
+    pairs = [(key, float(value)) for key, value in _pairs(list_of_definitions)]
+    return pairs, dict(pairs)

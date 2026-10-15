@@ -11,7 +11,7 @@ import pickle
 import pytest
 from helpers.synthetic import setup_lines, write_core
 
-from pearlsim.simulation import Simulation
+from pearlsim.simulation import DeckError, SerpentError, Simulation
 
 pytestmark = pytest.mark.characterization
 
@@ -56,7 +56,7 @@ def test_insertion_sequence_end_to_end(tmp_path, fake_serpent_command, monkeypat
     zone_map = json.loads((run / "zone_map5.json").read_text())
     assert any(k.startswith("fuel20_R1Z1G") and not k.endswith("G1") for k in zone_map["zoneR1Z1"])
     operating = json.loads((run / "synthetic_operating_5.json").read_text())
-    assert operating == {"power": "1.0E+06", "burnup_step": STEP_DAYS, "graphite_insertion_fraction": 0.5,
+    assert operating == {"power": 1.0e6, "burnup_step": STEP_DAYS, "graphite_insertion_fraction": 0.5,
                          "control_rod_position": 300.0, "fima_discharge_threshold": 18.63,
                          "fima_discharge_rel_std": 0.02288}
     golden("e2e/zone_map5.json", (run / "zone_map5.json").read_text())
@@ -72,17 +72,11 @@ def test_zone_occupancy_conserved_end_to_end(tmp_path, fake_serpent_command, mon
 
 
 @pytest.mark.e2e
-def test_serpent_failure_surfaces_as_missing_bumat(tmp_path, fake_serpent_command, monkeypatch):
-    """v1 ignores the Serpent exit code; the failure appears later as a missing .bumat (review #17)."""
-    with pytest.raises(FileNotFoundError):
-        run_case(tmp_path, fake_serpent_command, monkeypatch, num_steps=1, mode="fail")
-
-
-@pytest.mark.e2e
-@pytest.mark.xfail(strict=True, reason="review #17: Serpent exit status is not checked")
-def test_serpent_failure_raises_a_serpent_error(tmp_path, fake_serpent_command, monkeypatch):
-    with pytest.raises(RuntimeError):
-        run_case(tmp_path, fake_serpent_command, monkeypatch, num_steps=1, mode="fail")
+@pytest.mark.parametrize("mode, message", [("fail", "exited with status 1"), ("no_output", "without writing")])
+def test_serpent_failure_raises_serpent_error(tmp_path, fake_serpent_command, monkeypatch, mode, message):
+    """Review #17 (fixed): a failed or silent Serpent run stops the simulation with SerpentError."""
+    with pytest.raises(SerpentError, match=message):
+        run_case(tmp_path, fake_serpent_command, monkeypatch, num_steps=1, mode=mode)
 
 
 # ---------------------------------------------------------------- deck parser
@@ -93,9 +87,9 @@ def sim():
     return Simulation("synthetic")
 
 
-def test_set_options_are_stored_with_leading_space(sim):
-    sim.read_input_line("set pop 24000 30 10\n")
-    assert sim.serpent_settings["pop"] == " 24000 30 10"
+def test_set_options_are_stored_as_normalised_text(sim):
+    sim.read_input_line("set pop   24000 30\t10 # comment\n")
+    assert sim.serpent_settings["pop"] == "24000 30 10"
 
 
 def test_unknown_keywords_are_ignored(sim):
@@ -109,26 +103,27 @@ def test_comments_are_stripped(sim):
     assert sim.rod_insertion == 250.0
 
 
-@pytest.mark.xfail(strict=True, reason="review #19: 'set X clear' never matches because of a leading space")
 def test_set_clear_removes_option(sim):
+    """Review #19 (fixed)."""
     sim.read_input_line("set pop clear\n")
     assert "pop" not in sim.serpent_settings
 
 
-@pytest.mark.xfail(strict=True, reason="review #20: power is stored as a string")
 def test_power_is_numeric(sim):
+    """Review #20 (fixed): power is a float; the Serpent setting keeps the text as written."""
     sim.read_input_line("set_power 1.0E+06\n")
-    assert isinstance(sim.power, float)
+    assert sim.power == 1.0e6
+    assert sim.serpent_settings["power"] == "1.0E+06"
 
 
-@pytest.mark.xfail(strict=True, reason="review #22: tokens are split on single spaces only")
 def test_double_space_separator(sim):
+    """Review #22 (fixed)."""
     sim.read_input_line("set_rod_depth  300\n")
     assert sim.rod_insertion == 300.0
 
 
-@pytest.mark.xfail(strict=True, reason="review #18: restart passes a path string to pickle.load")
 def test_restart_loads_pickled_core(sim, tmp_path):
+    """Review #18 (fixed)."""
     os.makedirs(tmp_path / "run")
     with open(tmp_path / "core.pkl", "wb") as f:
         pickle.dump(sim.core, f)
@@ -136,3 +131,8 @@ def test_restart_loads_pickled_core(sim, tmp_path):
     original = sim.core
     sim.read_input_line("restart core.pkl")
     assert sim.core is not original
+
+
+def test_malformed_line_raises_deck_error(sim):
+    with pytest.raises(DeckError, match="set_rod_depth"):
+        sim.read_input_line("set_rod_depth deep\n")

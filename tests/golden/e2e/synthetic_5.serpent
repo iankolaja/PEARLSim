@@ -244,7 +244,7 @@ det core_56group_flux n
   60 369.47 1
 
 dep daystep 6.525
-set pop  1000 10 5
+set pop 1000 10 5
 set power 1.0E+06
 
 

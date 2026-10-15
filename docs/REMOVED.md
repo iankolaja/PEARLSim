@@ -68,11 +68,17 @@ Whole files:
 
 ## 3. v1 one-step LSTM steering (superseded by the multi-step planner)
 
-Keywords `steer`, `steer_constant_ascent`, `steer_updated` and helpers `get_reactivity_impacts*` in
-`simulation.py`. *(Removal pending, Phase A.)*
+One-step LSTM-guided run-in steering. It produced the `gFHR_automated_*`, `gFHR_ascension_*` and
+`gFHR_runin_*` v1 sequences. Known defects at removal: review #5, #6, #14–#16.
+
+| Removed | Recover from |
+|---|---|
+| keywords `steer`, `steer_constant_ascent`, `steer_updated` and helpers `get_reactivity_impacts`, `get_reactivity_impacts_updated`, `get_reactivity_impacts_delayed` in `pearlsim/simulation.py` | `v1-as-run` |
+| steering instruction files `gFHR_power_ascension*.csv`, `run_in_*.json` and the decks that use them | branch `v1` |
 
 ## Change log
 - Gamma-spectrum measurement code removed (section 1).
 - Pebble-wise ML code paths removed from `core.py`, `simulation.py`, `ml_utilities.py`, `PEARLSim.py`
   (section 2).
 - Pebble-wise ML files deleted and untracked artifacts archived (section 2).
+- v1 steering removed (section 3).

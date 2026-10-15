@@ -6,7 +6,6 @@ import subprocess
 import sys
 
 import pytest
-
 from conftest import FAKE_SERPENT
 
 DECK = """\

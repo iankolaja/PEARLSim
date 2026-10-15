@@ -9,7 +9,9 @@ Reads the deck, finds burnable materials (``mat ... burn 1``) and the number of
   v1 outputs (tests/fixtures/equilibrium_step100);
 * ``<deck>.bumat0`` .. ``<deck>.bumat<N>``: every burnable material, renamed the
   way Serpent renames materials inside particles (``<mat>pp<k>r1``), with a
-  deterministic "depletion": U-235 scaled by (1 - 0.01 k) and Xe-135 added.
+  deterministic "depletion": U-235 scaled by (1 - 0.01 step (1 + 0.05 k)) for
+  depletion step ``step`` and material index ``k`` (so materials differ in
+  burnup), and Xe-135 added.
 
 Environment:
   FAKE_SERPENT_MODE  ok (default) | fail (exit 1, no output) | no_output (exit 0,
@@ -66,7 +68,7 @@ def write_bumat(path, order, materials, step):
             f.write(f"mat  {name}pp{k}r1  0.0 fix 09c 9.59000E+02 vol 1.0\n")
             for nuclide, density in materials[name].items():
                 if nuclide.startswith("92235"):
-                    density = density * (1.0 - 0.01 * step)
+                    density = density * (1.0 - 0.01 * step * (1.0 + 0.05 * k))
                 f.write(f"            {nuclide}  {density:.14E}\n")
             if step > 0:
                 f.write(f"               541350  {1.0e-9 * step:.14E}\n")

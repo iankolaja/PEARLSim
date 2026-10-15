@@ -28,8 +28,8 @@ N_BUMAT_MATERIALS = 6
 
 sys.path.insert(0, REPO)
 from pearlsim.core import Core  # noqa: E402
-from pearlsim.ml_utilities import read_det_file  # noqa: E402
 from pearlsim.group_definitions import ENERGY_GRID_3, HEIGHT_GRID_20, RADIUS_GRID_8  # noqa: E402
+from pearlsim.ml_utilities import read_det_file  # noqa: E402
 from pearlsim.results_processing import extract_lstm_input_features, read_res_file  # noqa: E402
 
 

@@ -4,8 +4,8 @@ import json
 
 import numpy as np
 import pytest
-
 from helpers.synthetic import build_core
+
 from pearlsim.core import get_zone
 from pearlsim.material import Material
 from pearlsim.zone import Out_Of_Core_Bin
@@ -122,6 +122,31 @@ def test_volume_average_by_burnup_groups_by_fima(core):
     core.volume_average_by_burnup(bin_)
     assert sorted(bin_.inventory) == [f"avgdischarge_fuel20_G{g}" for g in sorted(range(2, 13), key=str)]
     assert sum(bin_.inventory.values()) == 120
+
+
+def _discharge_with_identical_burnup(core):
+    fresh = core.fresh_pebbles["fuel20"].concentrations
+    bin_ = Out_Of_Core_Bin()
+    for name in ("discharge_fuel20_R1Z3G1", "discharge_fuel20_R2Z3G1"):
+        conc = dict(fresh)
+        conc["92235<lib>"] *= 0.97
+        core.materials[name] = Material(name, conc)
+        bin_.inventory[name] = 9
+    return bin_
+
+
+def test_burnup_averaging_drops_fuel_with_identical_burnup(core):
+    """v1 behaviour (review #36): a single occupied histogram bin maps to group 1, which is never kept."""
+    bin_ = _discharge_with_identical_burnup(core)
+    core.volume_average_by_burnup(bin_)
+    assert bin_.inventory == {}
+
+
+@pytest.mark.xfail(strict=True, reason="review #36: identical-burnup discharge is dropped by burnup averaging")
+def test_burnup_averaging_keeps_fuel_with_identical_burnup(core):
+    bin_ = _discharge_with_identical_burnup(core)
+    core.volume_average_by_burnup(bin_)
+    assert sum(bin_.inventory.values()) == 18
 
 
 def test_material_json_gz_round_trip(core, tmp_path):

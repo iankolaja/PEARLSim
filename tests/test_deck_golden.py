@@ -4,7 +4,6 @@ Regenerate deliberately with ``pytest --update-golden`` and review the diff.
 """
 
 import pytest
-
 from helpers.synthetic import build_core
 
 pytestmark = pytest.mark.characterization

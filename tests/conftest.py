@@ -24,10 +24,9 @@ def _stub_module(name, **attributes):
     sys.modules[name] = module
 
 
-# v1 simulation.py imports these at module level: lstm needs TensorFlow, and
-# ml_model_wrappers was never committed. Stubs are removed as the imports are
-# cleaned up (refactor plan, Phase 0.5 commits 9 and 11).
-_stub_module("pearlsim.lstm", LSTM_predictor=object)
+# v1 simulation.py and pebble_model.py import ml_model_wrappers, which was never
+# committed. The stub goes away when the pebble-wise ML code is removed
+# (refactor plan, Phase 0.5 commit 11).
 _stub_module("pearlsim.ml_model_wrappers", SingleModelWrapper=object, XSModelWrapper=object)
 
 

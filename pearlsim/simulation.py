@@ -7,7 +7,6 @@ from pearlsim.material import Material
 from pearlsim.ml_utilities import read_det_file, add_computed_features
 from pearlsim.results_processing import read_core_flux, extract_lstm_input_features
 from pearlsim.ml_model_wrappers import SingleModelWrapper, XSModelWrapper
-from pearlsim.lstm import LSTM_predictor
 import numpy as np
 from pearlsim.pebble_model import Pebble_Model
 import pandas as pd

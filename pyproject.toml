@@ -36,6 +36,10 @@ testpaths = ["tests"]
 pythonpath = ["tests"]
 xfail_strict = true
 addopts = "-ra --strict-markers -m 'not serpent and not torch'"
+filterwarnings = [
+    # pyparsing 3.3 deprecations triggered inside matplotlib 3.9.1 (pinned to the v1 environment)
+    "ignore:.*deprecated - use.*:DeprecationWarning",
+]
 markers = [
     "serpent: runs the real Serpent executable (batch jobs only)",
     "torch: imports torch (slow import)",

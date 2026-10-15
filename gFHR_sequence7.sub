@@ -1,0 +1,35 @@
+#!/bin/sh
+
+
+
+#################### CONFIGURATION ####################
+#SBATCH --job-name=seq7
+
+#SBATCH --output=gFHR_sequence7.o 
+
+#SBATCH --error=gFHR_sequence7.error
+
+#SBATCH --partition=savio3_htc
+
+#SBATCH --time=48:00:00 
+
+#SBATCH --nodes=1
+
+#SBATCH --ntasks-per-node=1
+
+#SBATCH --cpus-per-task=40
+
+#################### ACCOUNT ####################
+
+#SBATCH --qos=savio_normal
+
+#SBATCH -A fc_neutronics
+
+#SBATCH --mail-type=all
+
+module unload python gcc cmake
+module load nano cmake/3.27.7 gcc/11.4.0 openmpi/4.1.6 python/3.11.6-gcc-11.4.0
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/global/home/groups/co_nuclear/gd_library/code/lib
+export LIBRARY_PATH=$LIBRARY_PATH:/global/home/groups/co_nuclear/gd_library/code/lib
+export CPATH=$CPATH:/global/home/groups/co_nuclear/gd_library/code/include
+python PEARLSim.py -c 40 -n 1 -f gFHR_sequence7.inp -w gFHR_sequence7

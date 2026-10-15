@@ -1,0 +1,35 @@
+#!/bin/sh
+
+
+
+#################### CONFIGURATION ####################
+#SBATCH --job-name=train_burnup
+
+#SBATCH --output=train_burnup_models.o 
+
+#SBATCH --error=train_burnup_models.error
+
+#SBATCH --partition=savio2
+
+#SBATCH --time=24:00:00 
+
+#SBATCH --nodes=1
+
+#SBATCH --ntasks-per-node=1
+
+#SBATCH --cpus-per-task=24
+
+#################### ACCOUNT ####################
+
+#SBATCH --qos=savio_lowprio
+
+#SBATCH -A co_nuclear 
+
+#SBATCH --mail-type=all
+
+module unload python gcc cmake
+module load python/3.8.8 gcc/12.1.0 openmpi/4.1.4-gcc cmake/3.22.0
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/global/home/groups/co_nuclear/gd_library/code/lib
+export LIBRARY_PATH=$LIBRARY_PATH:/global/home/groups/co_nuclear/gd_library/code/lib
+export CPATH=$CPATH:/global/home/groups/co_nuclear/gd_library/code/include
+python train_burnup_models.py

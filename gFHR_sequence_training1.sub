@@ -1,0 +1,36 @@
+#!/bin/sh
+
+
+
+#################### CONFIGURATION ####################
+#SBATCH --job-name=train1_1
+
+#SBATCH --output=gFHR_sequence_training1.o
+
+#SBATCH --error=gFHR_sequence_training1.error
+
+#SBATCH --partition=savio4_htc
+
+#SBATCH --time=12:00:00 
+
+#SBATCH --nodes=10
+
+#SBATCH --ntasks-per-node=1
+
+#SBATCH --cpus-per-task=56
+
+#################### ACCOUNT ####################
+
+#SBATCH --qos=savio_lowprio
+
+#SBATCH -A co_nuclear 
+
+#SBATCH --mail-type=all
+
+module unload python gcc cmake
+module load nano cmake/3.27.7 gcc/11.4.0 openmpi/4.1.6 python/3.11.6-gcc-11.4.0
+
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/global/home/groups/co_nuclear/gd_library/code/lib
+export LIBRARY_PATH=$LIBRARY_PATH:/global/home/groups/co_nuclear/gd_library/code/lib
+export CPATH=$CPATH:/global/home/groups/co_nuclear/gd_library/code/include
+python PEARLSim.py -c 56 -n 10 -f gFHR_sequence_training1.inp -w gFHR_sequence

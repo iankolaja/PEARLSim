@@ -1,0 +1,35 @@
+#!/bin/sh
+
+
+
+#################### CONFIGURATION ####################
+#SBATCH --job-name=PEARLSim
+
+#SBATCH --output=gFHR_reactivity.o 
+
+#SBATCH --error=gFHR_reactivity.error
+
+#SBATCH --partition=savio3
+
+#SBATCH --time=24:00:00 
+
+#SBATCH --nodes=1
+
+#SBATCH --ntasks-per-node=1
+
+#SBATCH --cpus-per-task=34
+
+#################### ACCOUNT ####################
+
+#SBATCH --qos=savio_lowprio
+
+#SBATCH -A co_nuclear 
+
+#SBATCH --mail-type=all
+
+module unload python gcc cmake
+module load python/3.10.10 gcc/12.1.0 openmpi/4.1.4-gcc cmake/3.22.0
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/global/home/groups/co_nuclear/gd_library/code/lib
+export LIBRARY_PATH=$LIBRARY_PATH:/global/home/groups/co_nuclear/gd_library/code/lib
+export CPATH=$CPATH:/global/home/groups/co_nuclear/gd_library/code/include
+python PEARLSim.py -c 34 -n 1 -f gFHR_reactivity.inp -w gFHR_reactivity

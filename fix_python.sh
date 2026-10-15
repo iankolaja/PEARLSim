@@ -1,0 +1,2 @@
+export PYTHONPATH=/global/scratch/users/ikolaja/conda/python3_11_6/lib/python311.zip:/global/scratch/users/ikolaja/conda/python3_11_6/lib/python3.11:/global/scratch/users/ikolaja/conda/python3_11_6/lib/python3.11/lib-dynload:/global/home/users/ikolaja/.local/lib/python3.11/site-packages:/global/scratch/users/ikolaja/conda/python3_11_6/lib/python3.11/site-packages:/global/scratch/users/ikolaja/conda/python3_11_6/lib/python3.11/site-packages/setuptools/_vendor
+python PEARLSim.py -c 56 -f gFHR_sequence_sampled_pebbles.inp -w gFHR_sequence

@@ -1,0 +1,285 @@
+{
+    "description": "Running in where power and fuel insertion are increased to 100% over 80 steps, intended to produce an even burnup distribution with 8 passes. The control rod is used as a flexible reactivity corrector, followed by the burnup step/circulation rate.",
+    "variable_order": [
+        "power",
+        "burnup_step",
+        "graphite_insertion_fraction",
+        "control_rod_position",
+        "fima_discharge_threshold",
+        "fima_discharge_rel_std"
+    ],
+    "steps": {
+        "0": {
+            "description": "Fuel increase constant",
+            "target_reactivity": 0,
+            "min": [
+                0.00E+00,
+                6.5250,
+                0.00000,
+                60.25,
+                10.00,
+                0.02288
+            ],
+            "max": [
+                2.80E+08,
+                19.5750,
+                1.00000,
+                369.47,
+                24.00,
+                0.02288
+            ],
+            "step": [
+                279990.0,
+                0.01305,
+                -0.008879,
+                0.30922,
+                0.00,
+                0.00
+            ],
+            "endpoint": [
+                2.80E+08,
+                -1,
+                0.00000,
+                -1,
+                -1,
+                -1
+            ],
+            "min_adjustments": [
+                5,
+                0,
+                1,
+                0,
+                0,
+                0
+            ],
+            "max_adjustments": [
+                40,
+                0,
+                1,
+                200,
+                0,
+                0
+            ],
+            "flexible": [
+                1,
+                0,
+                0,
+                1,
+                0,
+                0
+            ],
+            "is_reversible":[
+                false,
+                true,
+                false,
+                true,
+                true,
+                true
+            ]
+        },
+        "1": {
+            "description": "Power increase constant",
+            "target_reactivity": 0,
+            "min": [
+                0.00E+00,
+                6.5250,
+                0.00000,
+                60.25,
+                10.00,
+                0.02288
+            ],
+            "max": [
+                2.80E+08,
+                19.5750,
+                1.00000,
+                369.47,
+                24.00,
+                0.02288
+            ],
+            "step": [
+                279990.0,
+                0.01305,
+                -0.0110987,
+                0.30922,
+                0.00,
+                0.00
+            ],
+            "endpoint": [
+                2.80E+08,
+                -1,
+                0.00000,
+                -1,
+                -1,
+                -1
+            ],
+            "min_adjustments": [
+                13,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "max_adjustments": [
+                13,
+                0,
+                0,
+                200,
+                0,
+                0
+            ],
+            "flexible": [
+                0,
+                0,
+                0,
+                1,
+                0,
+                0
+            ],
+            "is_reversible":[
+                false,
+                true,
+                false,
+                true,
+                true,
+                true
+            ]
+        },
+        "2": {
+            "description": "Rod full removal",
+            "target_reactivity": 0,
+            "min": [
+                0.00E+00,
+                6.5250,
+                0.00000,
+                60.25,
+                10.00,
+                0.02288
+            ],
+            "max": [
+                2.80E+08,
+                19.5750,
+                1.00000,
+                369.47,
+                24.00,
+                0.02288
+            ],
+            "endpoint": [
+                -1,
+                -1,
+                -1,
+                369.47,
+                -1,
+                -1
+            ],
+            "step": [
+                3499875.0,
+                0.01305,
+                -0.0110987,
+                0.30922,
+                0.00,
+                0.00
+            ],
+            "min_adjustments": [
+                0,
+                0,
+                0,
+                100,
+                0,
+                0
+            ],
+            "max_adjustments": [
+                0,
+                50,
+                0,
+                100,
+                0,
+                0
+            ],
+            "flexible": [
+                0,
+                1,
+                0,
+                0,
+                0,
+                0
+            ],
+            "is_reversible":[
+                false,
+                true,
+                false,
+                false,
+                true,
+                true
+            ]
+        },
+        "3": {
+            "description": "Circulation rate normal",
+            "target_reactivity": 0,
+            "min": [
+                0.00E+00,
+                6.5250,
+                0.00000,
+                60.25,
+                10.00,
+                0.02288
+            ],
+            "max": [
+                2.80E+08,
+                19.5750,
+                1.00000,
+                369.47,
+                24.00,
+                0.02288
+            ],
+            "step": [
+                3499875.0,
+                -0.01305,
+                -0.0110987,
+                0.30922,
+                0.00,
+                0.00
+            ],
+            "endpoint": [
+                -1,
+                6.5250,
+                -1,
+                -1,
+                -1,
+                -1
+            ],
+            "min_adjustments": [
+                0,
+                20,
+                0,
+                0,
+                0,
+                0
+            ],
+            "max_adjustments": [
+                0,
+                20,
+                0,
+                0,
+                0,
+                0
+            ],
+            "flexible": [
+                0,
+                0,
+                0,
+                0,
+                0,
+                0
+            ],
+            "is_reversible":[
+                false,
+                true,
+                false,
+                false,
+                true,
+                true
+            ]
+        }
+    }
+}

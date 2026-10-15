@@ -1,0 +1,160 @@
+set_seed 42
+set_averaging_mode burnup
+set_threshold 17.0
+core_geometry "gFHR_template.serpent"
+triso_file 800 gFHR_triso.dat
+# load_pebble_model ml_models/current_rfr.pkl ml_models/burnup_rfr.pkl
+# load_velocity_profile gFHR_velocity_profile.dat
+fresh fuel20 materials/fuel20.dat graphpeb materials/graphpeb.dat
+static_fuel_materials SiC materials/SiC_gFHR.dat PyC materials/PyC_gFHR.dat buffer materials/buffer_gFHR.dat matrix materials/matrix_gFHR.dat
+define_zones gFHR_zones.inp gFHR_points.dat
+
+set seed 42
+set acelib "/global/home/groups/co_nuclear/serpent/xsdata/endfb7/sss_endfb7u.xsdata" "/global/home/groups/co_nuclear/serpent_photon_data/mcplib.xsdata"
+set declib "/global/home/groups/co_nuclear/serpent/xsdata/endfb7/sss_endfb7.dec"
+set pdatadir "/global/home/groups/co_nuclear/serpent_photon_data/photon_data"
+set nfylib "/global/home/groups/co_nuclear/serpent/xsdata/endfb7/sss_endfb7.nfy"
+set opti 2
+set gcu -1
+set memfrac 0.99
+set repro 0
+set shbuf 0 0
+set outp 100000
+set nbuf 1000
+set depout 3 1
+set ures 1
+set inventory all
+set printm 1 1.0E-41
+set fpcut 0
+set xenon 1
+ 
+initialize 100 graphpeb 1
+
+# Begin serpent runs here!
+set opti 2
+set pop 16000 30 10
+
+debug_level 2
+
+set_discharge_threshold 18.63
+set_threshold_rel_std 0.02288
+set_burnup_time_step 6.525
+set_power 1.0E+04
+set_rod_depth 60.25
+
+insertion 9 off 0 graphpeb 0.8879 reinsert 1.0 fuel20 1.0
+set_num_fuel_groups 4
+insertion 11 off 2 graphpeb 0.8879 reinsert 1.0 fuel20 1.0
+
+set_num_fuel_groups 8
+insertion 9 off 2 graphpeb 0.8879 reinsert 1.0 fuel20 1.0
+
+set pop 24000 30 10
+insertion 1 off 2 graphpeb 0.8879 reinsert 1.0 fuel20 1.0
+
+
+set_power 1.0E+04
+
+insertion 1 off 2 graphpeb 0.8879 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.87893 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.86996 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.86099 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.85203 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.84306 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.83409 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.82512 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.81615 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.80718 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.79821 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.78924 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.78028 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.77131 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.76234 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.75337 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.7444 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.73543 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.72646 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.71749 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.70853 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.69956 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.69059 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.68162 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.67265 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.66368 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.65471 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.64575 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.63678 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.62781 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.61884 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.60987 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.6009 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.59193 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.58296 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.574 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.56503 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.55606 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.54709 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.53812 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.52915 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.52018 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.51122 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.50225 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.49328 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.48431 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.47534 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.46637 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.4574 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.44843 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.43947 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.4305 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.42153 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.41256 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.40359 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.39462 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.38565 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.37668 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.36772 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.35875 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.34978 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.34081 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.33184 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.32287 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.3139 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.30494 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.29597 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.287 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.27803 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.26906 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.26009 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.25112 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.24215 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.23319 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.22422 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.21525 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.20628 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.19731 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.18834 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.17937 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.17041 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.16144 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.15247 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.1435 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.13453 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.12556 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.11659 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.10762 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.09866 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.08969 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.08072 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.07175 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.06278 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.05381 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.04484 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.03587 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.02691 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.01794 reinsert 1.0 fuel20 1.0
+insertion 1 off 2 graphpeb 0.00897 reinsert 1.0 fuel20 1.0
+insertion 6 off 2 graphpeb 0.0 reinsert 1.0 fuel20 1.0
+
+
+save

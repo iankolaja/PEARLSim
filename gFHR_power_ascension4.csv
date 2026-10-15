@@ -1,0 +1,5 @@
+﻿power,burnup_step,graphite_insertion_fraction,control_rod_position,fima_discharge_threshold,fima_discharge_rel_std,reactivity_target
+279990.0,0.01305,-8.879E-4,0.30922,0.00,0.00,0.00
+0.00E+00,6.5250,0.00000,60.25,10.00,0.02288,0.0
+2.80E+08,19.5750,1.00000,369.47,24.00,0.02288,0.0
+2.80E+08,6.5250,0.000,369.47,18.63,0.02288,0.0

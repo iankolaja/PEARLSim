@@ -1,0 +1,36 @@
+#!/bin/sh
+
+
+
+#################### CONFIGURATION ####################
+#SBATCH --job-name=fore0
+
+#SBATCH --output=gFHR_forecast_base.o 
+
+#SBATCH --error=gFHR_forecast_base.error
+
+#SBATCH --partition=savio4_htc
+
+#SBATCH --time=24:00:00 
+
+#SBATCH --nodes=1
+
+#SBATCH --ntasks-per-node=1
+
+#SBATCH --cpus-per-task=56
+
+#################### ACCOUNT ####################
+
+#SBATCH --qos=savio_normal
+
+#SBATCH -A fc_neutronics
+
+#SBATCH --mail-type=all
+
+module unload python gcc cmake
+module load nano cmake/3.27.7 gcc/11.4.0 openmpi/4.1.6 python/3.11.6-gcc-11.4.0
+conda activate python3_11_6
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/global/home/groups/co_nuclear/gd_library/code/lib
+export LIBRARY_PATH=$LIBRARY_PATH:/global/home/groups/co_nuclear/gd_library/code/lib
+export CPATH=$CPATH:/global/home/groups/co_nuclear/gd_library/code/include
+python PEARLSim.py -c 56 -n 1 -f gFHR_forecast_base.inp -w gFHR_forecast_base

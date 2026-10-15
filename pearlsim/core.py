@@ -7,6 +7,7 @@ import os
 import json
 from .get_fima import get_fima, heavy_metal_density
 from .nuclear_data import ENDF7_V1, CoreConditions, ThermRegistry, render_template
+from . import replicas
 import gzip
 
 BINNING_ATTEMPTS = 20
@@ -460,14 +461,15 @@ class Core():
             fuel_type = key.split("_")[0]
             self.materials[key] = Material(key, self.fresh_pebbles[fuel_type])
 
-    def generate_pebble_locations(self, filename, do_shuffle=True):
+    def generate_pebble_locations(self, filename, do_shuffle=True, rng=None):
+        rng = self.rng if rng is None else rng
         num_radial_channels = len(self.zones)
         pebble_text = ""
         assigned_pebbles = pd.DataFrame()
         for r_zone in range(num_radial_channels):
             num_axial_zones = len(self.axial_zone_bounds[r_zone]) + 1
             for z_zone in range(num_axial_zones):
-                pebble_s, zone_inventory = self.zones[r_zone][z_zone].shuffle_pebbles(self.pebble_radius, self.rng)
+                pebble_s, zone_inventory = self.zones[r_zone][z_zone].shuffle_pebbles(self.pebble_radius, rng)
                 pebble_text += pebble_s
                 assigned_pebbles = pd.concat([assigned_pebbles, zone_inventory])
         with open(filename, 'w') as f:
@@ -483,7 +485,12 @@ class Core():
                         volumes[mat_name] = zone.inventory[mat_name] * fuel_kernel_per_pebble_volume
         return volumes
 
-    def generate_input(self, serpent_settings, burnup_time_step, debug, cr_position):
+    def generate_input(self, serpent_settings, burnup_time_step, debug, cr_position, replica=None, rng=None):
+        """Write this step's Serpent deck and pebble file; return the deck name.
+
+        replica: None for the single-replica (v1) file names, else the replica index.
+        rng: generator for the pebble shuffle (default: self.rng).
+        """
         marker = "%%PEARLSIM_THERM_CARDS%%"
         conditions = self.conditions or CoreConditions()
         registry = ThermRegistry(self.nuclear_data, conditions)
@@ -498,9 +505,9 @@ class Core():
 
         input_str += "\n\n%%%%%%%% Pebble Universe Definition \n\n"
 
-        peb_file_name = f"pebble_positions_{self.iteration}.csv"
-        file_name = f"{self.simulation_name}_{self.iteration}.serpent"
-        self.generate_pebble_locations(peb_file_name)
+        peb_file_name = replicas.pebble_file(self.iteration, replica)
+        file_name = replicas.stem(self.simulation_name, self.iteration, replica)
+        self.generate_pebble_locations(peb_file_name, rng=rng)
         input_str += f"pbed u_pb u_flibe \"{peb_file_name}\" \n"
 
         input_str += "\n\n%%%%%%%% Material and Pebble Definitions \n\n"
@@ -616,46 +623,23 @@ class Core():
             axial_zone = int(zone_key.split("R")[1].split("Z")[1]) - 1
             self.zones[radial_zone][axial_zone].inventory = zone_map[zone_key]
 
-    def update_from_bumat(self, debug, iteration=None, step=1):
+    def update_from_bumat(self, debug, iteration=None, step=1, num_replicas=1):
+        """Set material compositions from a step's .bumat output, averaged over its replicas.
+
+        Returns the replica spread summary ({} for one replica).
+        """
         if iteration is None:
             iteration = self.iteration
-        bumat_name = f"{self.simulation_name}_{iteration}.serpent.bumat{step}"
+        names = [f"{replicas.stem(self.simulation_name, iteration, r)}.bumat{step}"
+                 for r in replicas.replica_ids(num_replicas)]
         if debug > 0:
-            print(f"Reading {bumat_name} and updating zone materials...")
-        with open(bumat_name, 'r') as f:
-            reading = False
-            first_mat = True
-            for line in f:
-                line = line.split()
-                if len(line) == 0:
-                    continue
-                if line[0] == "mat":
-                    if not first_mat:
-                        if debug > 0:
-                            print(f"Updating {current_mat_name}")
-                        if current_mat_name in self.materials.keys():
-                            self.materials[current_mat_name].concentrations = current_conc
-                        else:
-                            self.materials[current_mat_name] = Material(current_mat_name, current_conc)
-                    current_mat_name = line[1].split("pp")[0]
-                    current_conc = {}
-                    reading = True
-                    first_mat = False
-                elif reading:
-                    id = line[0].split(".")
-                    if len(id) > 1:
-                        nuclide = id[0] + "<lib>"
-                    else:
-                        nuclide = id[0]
-                    amount = float(line[1].replace("\n", ""))
-                    current_conc[nuclide] = amount
-        # Handles the last-read material block
-        # TODO: Make this block obselete or make these 6 lines of code a function
-        if debug > 1:
-            print(f"Updating {current_mat_name}")
+            print(f"Reading {', '.join(names)} and updating zone materials...")
+        averaged, spread = replicas.average_compositions([replicas.read_bumat(name) for name in names])
+        for name, concentrations in averaged.items():
+            if name in self.materials:
+                self.materials[name].concentrations = concentrations
+            else:
+                self.materials[name] = Material(name, concentrations)
         if debug > 0:
             print("Complete.")
-        if current_mat_name in self.materials.keys():
-            self.materials[current_mat_name].concentrations = current_conc
-        else:
-            self.materials[current_mat_name] = Material(current_mat_name, current_conc)
+        return spread

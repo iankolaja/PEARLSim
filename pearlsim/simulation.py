@@ -17,6 +17,7 @@ import subprocess
 import numpy as np
 import pandas as pd
 
+from pearlsim import replicas
 from pearlsim.core import Core
 from pearlsim.material import Material
 from pearlsim.nuclear_data import ENDF7_V1, PROFILES
@@ -50,6 +51,8 @@ class Simulation:
         self.serpent_settings = {"pop": "10000 50 25"}
         self.base_seed = None  # set by set_seed; per-step generators derive from it
         self.thermal_coupling = False
+        self.replicas = 1  # independent Serpent runs per step, averaged (set_replicas)
+        self.replica_mode = "concurrent"
 
     # ------------------------------------------------------------------ deck parsing
 
@@ -155,7 +158,7 @@ class Simulation:
             self.core.rng = self.step_rng(self.core.iteration)
             self.run_step(1, "static")
         elif serpent_flag == 2:
-            self.core.update_from_bumat(self.debug, step=last_step)
+            self.core.update_from_bumat(self.debug, step=last_step, num_replicas=self.replicas)
             self.days += self.burnup_time_step
             self.core.iteration += 1
         elif serpent_flag == 3:
@@ -214,6 +217,16 @@ class Simulation:
 
     def _kw_set_thermal_coupling(self, args):
         self.thermal_coupling = get_boolean(args[0])
+
+    def _kw_set_replicas(self, args):
+        """set_replicas <n> [concurrent|sequential]: n reshuffled Serpent runs per step, averaged."""
+        num = int(args[0])
+        if num < 1:
+            raise ValueError("the number of replicas must be at least 1")
+        mode = args[1] if len(args) > 1 else "concurrent"
+        if mode not in ("concurrent", "sequential"):
+            raise ValueError(f"replica mode must be 'concurrent' or 'sequential', not {mode!r}")
+        self.replicas, self.replica_mode = num, mode
 
     def _kw_set(self, args):
         setting, value = args[0], " ".join(args[1:])
@@ -282,25 +295,39 @@ class Simulation:
                 "fima_discharge_threshold": self.fima_discharge_threshold,
                 "fima_discharge_rel_std": self.fima_discharge_rel_std,
                 "base_seed": self.base_seed,
+                "replicas": self.replicas,
                 "serpent_seed": serpent_seed,
                 "nuclear_data": self.core.nuclear_data.name,
                 "thermal_coupling": self.thermal_coupling,
                 "temperatures": temperatures}
+
+    def shuffle_rng(self, iteration, replica):
+        """Generator for one replica's pebble shuffle.
+
+        Replica 0 (and the single-replica case) continues the step generator used by
+        insert, so one replica reproduces single-replica decks; the others draw from
+        their own (seed, iteration, replica) streams.
+        """
+        return self.core.rng if not replica else self.step_rng(iteration, replica=replica)
 
     def run_step(self, serpent_flag, graphite_insertion_fraction):
         """Advance one depletion step after the core inventory has been updated.
 
         serpent_flag: 0 = bookkeeping only (no Serpent); 1 = run Serpent;
         2 = reuse existing Serpent results for this step if present, otherwise run.
+        With n replicas, flag 2 reruns only the replicas whose final .bumat is missing,
+        and the step completes only when all n exist.
         """
         iteration = self.core.iteration
         last_step = len(self.core.substep_schema)
-        bumat_name = f"{self.simulation_name}_{iteration}.serpent.bumat{last_step}"
+        ids = replicas.replica_ids(self.replicas)
+        bumats = {r: f"{replicas.stem(self.simulation_name, iteration, r)}.bumat{last_step}" for r in ids}
         zone_file_name = f"zone_map{iteration}.json"
         operating_file = f"{self.core.simulation_name}_operating_{iteration}.json"
-        settings = self.serpent_settings_for_step(iteration)
+        settings = {r: self.serpent_settings_for_step(iteration, replica=r or 0) for r in ids}
+        seeds = [settings[r].get("seed") for r in ids]
         self.update_conditions()
-        acelib = settings.get("acelib", "")
+        acelib = settings[ids[0]].get("acelib", "")
         if self.core.nuclear_data is ENDF7_V1 and "endf8" in acelib or \
                 self.core.nuclear_data is not ENDF7_V1 and "endfb7" in acelib:
             logger.warning("set acelib (%s) does not look like profile %s", acelib, self.core.nuclear_data.name)
@@ -313,23 +340,29 @@ class Simulation:
                 self.core.save_all_materials(f"core_materials_{iteration}.json.gz")
             self.core.iteration += 1
             return
-        if serpent_flag == 2 and os.path.isfile(bumat_name):
-            logger.info("%s exists; reusing Serpent results for step %d", bumat_name, iteration)
-            self.core.save_operating_parameters(
-                operating_file, self.operating_parameters(graphite_insertion_fraction, settings.get("seed")))
-        elif serpent_flag in (1, 2):
-            input_name = self.core.generate_input(settings, self.burnup_time_step, self.debug,
-                                                  cr_position=self.rod_insertion)
-            self.core.save_operating_parameters(
-                operating_file, self.operating_parameters(graphite_insertion_fraction, settings.get("seed")))
-            self.run_serpent(input_name)
-            if not os.path.isfile(bumat_name):
-                raise SerpentError(f"Serpent finished without writing {bumat_name}")
+        if serpent_flag not in (1, 2):
+            raise ValueError(f"unknown Serpent flag {serpent_flag}")
+        to_run = [r for r in ids if serpent_flag == 1 or not os.path.isfile(bumats[r])]
+        for r in ids:
+            if r not in to_run:
+                logger.info("%s exists; reusing Serpent results for step %d", bumats[r], iteration)
+        self.core.save_operating_parameters(
+            operating_file,
+            self.operating_parameters(graphite_insertion_fraction, seeds[0] if self.replicas == 1 else seeds))
+        if to_run:
+            decks = [self.core.generate_input(settings[r], self.burnup_time_step, self.debug,
+                                              cr_position=self.rod_insertion, replica=r,
+                                              rng=self.shuffle_rng(iteration, r))
+                     for r in to_run]
+            self.run_serpent(decks)
+            missing = [bumats[r] for r in to_run if not os.path.isfile(bumats[r])]
+            if missing:
+                raise SerpentError(f"Serpent finished without writing {', '.join(missing)}")
             self.core.save_zone_maps(zone_file_name)
             self.core.save_all_materials(f"core_materials_{iteration}.json.gz")
-        else:
-            raise ValueError(f"unknown Serpent flag {serpent_flag}")
-        self.core.update_from_bumat(self.debug, step=last_step)
+        spread = self.core.update_from_bumat(self.debug, step=last_step, num_replicas=self.replicas)
+        if self.replicas > 1:
+            replicas.write_spread(f"{self.simulation_name}_replica_spread_{iteration}.json", spread)
         self.days += self.burnup_time_step
         self.core.iteration += 1
 
@@ -339,20 +372,47 @@ class Simulation:
                 zone.initialize({"graphpeb": 1}, debug=self.debug)
         self.core.iteration = load_iteration
         self.core.load_zone_maps(f"zone_map{load_iteration}.json")
-        self.core.load_pebble_locations(f"pebble_positions_{load_iteration}.csv", debug=self.debug)
-        self.core.update_from_bumat(self.debug, iteration=load_iteration, step=burnup_step)
+        first = replicas.replica_ids(self.replicas)[0]
+        self.core.load_pebble_locations(replicas.pebble_file(load_iteration, first), debug=self.debug)
+        self.core.update_from_bumat(self.debug, iteration=load_iteration, step=burnup_step,
+                                    num_replicas=self.replicas)
 
-    def run_serpent(self, input_name):
+    def serpent_command_line(self, input_name, threads):
         command = shlex.split(self.serpent_command)
         if self.num_nodes > 1:
-            command = (["mpirun", "-np", str(self.num_nodes), "--map-by", f"ppr:1:node:pe={self.cpu_cores}"]
-                       + command + ["-omp", str(self.cpu_cores), input_name])
+            return (["mpirun", "-np", str(self.num_nodes), "--map-by", f"ppr:1:node:pe={threads}"]
+                    + command + ["-omp", str(threads), input_name])
+        return command + [input_name, "-omp", str(threads)]
+
+    def run_serpent(self, input_names):
+        """Run Serpent on one deck or several replica decks; raise SerpentError if any run fails.
+
+        Several decks on one node run concurrently with cpu_cores // n threads each
+        (output in <deck>.log); with set_replicas ... sequential, or on several nodes,
+        they run one after another with all cores. Every run is waited for before
+        failures are reported, so the finished replicas can be reused on a rerun.
+        """
+        if isinstance(input_names, str):
+            input_names = [input_names]
+        concurrent = len(input_names) > 1 and self.replica_mode == "concurrent" and self.num_nodes == 1
+        threads = max(1, self.cpu_cores // len(input_names)) if concurrent else self.cpu_cores
+        commands = [self.serpent_command_line(name, threads) for name in input_names]
+        if concurrent:
+            processes = []
+            for name, command in zip(input_names, commands):
+                logger.info("Starting %s", " ".join(command))
+                with open(f"{name}.log", "w") as log:
+                    processes.append(subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT))
+            codes = [process.wait() for process in processes]
         else:
-            command = command + [input_name, "-omp", str(self.cpu_cores)]
-        logger.info("Running %s", " ".join(command))
-        result = subprocess.run(command)
-        if result.returncode != 0:
-            raise SerpentError(f"{' '.join(command)} exited with status {result.returncode}")
+            codes = []
+            for command in commands:
+                logger.info("Running %s", " ".join(command))
+                codes.append(subprocess.run(command).returncode)
+        failed = [f"{' '.join(command)} exited with status {code}"
+                  for command, code in zip(commands, codes) if code != 0]
+        if failed:
+            raise SerpentError("; ".join(failed))
 
 
 def _pairs(tokens):

@@ -59,7 +59,7 @@ def test_insertion_sequence_end_to_end(tmp_path, fake_serpent_command, monkeypat
     serpent_seed = operating.pop("serpent_seed")
     assert operating == {"power": 1.0e6, "burnup_step": STEP_DAYS, "graphite_insertion_fraction": 0.5,
                          "control_rod_position": 300.0, "fima_discharge_threshold": 18.63,
-                         "fima_discharge_rel_std": 0.02288, "base_seed": 7,
+                         "fima_discharge_rel_std": 0.02288, "base_seed": 7, "replicas": 1,
                          "nuclear_data": "endf7_v1", "thermal_coupling": False, "temperatures": None}
     assert f"set seed {serpent_seed}\n" in (run / "synthetic_5.serpent").read_text()
     seeds = {json.loads((run / f"synthetic_operating_{s}.json").read_text())["serpent_seed"] for s in range(1, 6)}

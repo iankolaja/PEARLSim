@@ -168,41 +168,76 @@ def extract_lstm_input_features(directory, step, run_name="gFHR_equilibrium", me
         return input_table, averaged_features
 
 
-def collect_results_from_step(directory, step, run_name="gFHR_equilibrium", keff_index = -1, meshes = [], 
-                              include_simulation_data=True):
-    # Inputs to sequence model
-    input_table = {}
-    # Targets to predict with sequence model
+def _read_step_outputs(stem, keff_index, include_simulation_data):
+    """k_eff, its relative uncertainty, the output meshes and (optionally) the coarse mesh of one Serpent run."""
+    keff_values, keff_unc_values = read_res_file(f"{stem}_res.m", "ANA_KEFF", burnup_step="all")
+    det_file = f"{stem}_det{len(keff_values)-1}.m"
+    if not os.path.exists(det_file):
+        det_file = f"{stem}_det{len(keff_values)-2}.m"
+    out_meshes = read_det_file(det_file,
+                               meshes_to_read=["subzone_3group_flux", "subzone_power"],
+                               mesh_grids_rze=[(RADIUS_GRID_8, HEIGHT_GRID_20, ENERGY_GRID_3),
+                                               (RADIUS_GRID_8, HEIGHT_GRID_20, [0.0])])
+    coarse_mesh = None
+    if include_simulation_data:
+        coarse_mesh = read_det_file(f"{stem}_det0.m",
+                                    meshes_to_read=["coarse_7group_flux"],
+                                    mesh_grids_rze=[(RADIUS_GRID_3, HEIGHT_GRID_8, ENERGY_GRID_7)])
+    return keff_values[keff_index], keff_unc_values[keff_index], out_meshes, coarse_mesh
+
+
+def _mean_of_replicas(values, relative_unc):
+    """Mean over replicas, the relative uncertainty of the mean, and the replica sample std.
+
+    Works elementwise on arrays (meshes) as well as on scalars (k_eff).
+    """
+    values, relative_unc = np.asarray(values, dtype=float), np.asarray(relative_unc, dtype=float)
+    n = len(values)
+    mean = values.mean(axis=0)
+    absolute = np.sqrt(((values * relative_unc) ** 2).sum(axis=0)) / n
+    with np.errstate(divide="ignore", invalid="ignore"):
+        unc = np.where(mean != 0, absolute / np.abs(mean), 0.0)
+    return mean, unc, values.std(axis=0, ddof=1)
+
+
+def collect_results_from_step(directory, step, run_name="gFHR_equilibrium", keff_index = -1, meshes = [],
+                              include_simulation_data=True, num_replicas=1):
+    """Serpent results and model inputs of one step.
+
+    With num_replicas > 1, k_eff and the meshes are the replica means (uncertainty
+    of the mean from the Serpent statistics), and the per-replica k_eff values
+    (keff_rep<r>) and their sample std (keff_rep_std) are added; each output mesh
+    gains a "replica_std" array.
+    """
     output_table = {}
     output_meshes = {}
-
-    # Representative averages of features produced in hyperfidelity model
-    averaged_features = {} 
-    
-    # Table of data needed for hyperfidelity and gamma spectrum simulations
     simulation_data = {}
-    
 
-
-    res_file = f"{directory}/{run_name}_{step}.serpent_res.m"
-    keff_values, keff_unc_values = read_res_file(res_file, "ANA_KEFF", burnup_step="all")
-    output_table["final_analog_keff"] = keff_values[keff_index]
-    output_table["final_analog_keff_unc"] = keff_unc_values[keff_index]
-
-    det_file = f"{directory}/{run_name}_{step}.serpent_det{len(keff_values)-1}.m"
-    if not os.path.exists(det_file):
-        det_file = f"{directory}/{run_name}_{step}.serpent_det{len(keff_values)-2}.m"
-    out_meshes = read_det_file(det_file, 
-                           meshes_to_read=["subzone_3group_flux",
-                                           "subzone_power"], 
-                           mesh_grids_rze = [(RADIUS_GRID_8, HEIGHT_GRID_20, ENERGY_GRID_3),
-                                             (RADIUS_GRID_8, HEIGHT_GRID_20, [0.0])])
+    if num_replicas == 1:
+        keff, keff_unc, out_meshes, coarse_mesh = _read_step_outputs(
+            f"{directory}/{run_name}_{step}.serpent", keff_index, include_simulation_data)
+        output_table["final_analog_keff"] = keff
+        output_table["final_analog_keff_unc"] = keff_unc
+    else:
+        runs = [_read_step_outputs(f"{directory}/{run_name}_{step}_r{r}.serpent", keff_index, include_simulation_data)
+                for r in range(num_replicas)]
+        keff, keff_unc, keff_std = _mean_of_replicas([run[0] for run in runs], [run[1] for run in runs])
+        output_table["final_analog_keff"] = float(keff)
+        output_table["final_analog_keff_unc"] = float(keff_unc)
+        for r, run in enumerate(runs):
+            output_table[f"keff_rep{r}"] = run[0]
+        output_table["keff_rep_std"] = float(keff_std)
+        out_meshes = runs[0][2]
+        for name, mesh in out_meshes.items():
+            mesh["data"], mesh["unc"], mesh["replica_std"] = _mean_of_replicas(
+                [run[2][name]["data"] for run in runs], [run[2][name]["unc"] for run in runs])
+        coarse_mesh = runs[0][3]
+        if coarse_mesh is not None:
+            for name, mesh in coarse_mesh.items():
+                mesh["data"], mesh["unc"], mesh["replica_std"] = _mean_of_replicas(
+                    [run[3][name]["data"] for run in runs], [run[3][name]["unc"] for run in runs])
     # Extract the meshes used for PEARLSim hyperfidelity
     if include_simulation_data:
-        det_file = f"{directory}/{run_name}_{step}.serpent_det0.m"
-        coarse_mesh = read_det_file(det_file, 
-                               meshes_to_read=["coarse_7group_flux"], 
-                               mesh_grids_rze = [(RADIUS_GRID_3, HEIGHT_GRID_8, ENERGY_GRID_7)])
         simulation_data["coarse_7group_flux"] = coarse_mesh["coarse_7group_flux"]
     output_table.update(flatten_mesh(out_meshes["subzone_3group_flux"]["data"]))
     output_meshes["subzone_3group_flux"] = out_meshes["subzone_3group_flux"]
@@ -216,7 +251,7 @@ def collect_results_from_step(directory, step, run_name="gFHR_equilibrium", keff
     
     return input_table, averaged_features, output_table, output_meshes, simulation_data
 
-    
+
 def plot_mesh_comparison_from_series(mesh_predicted_series, mesh_actual_series, plot_label, fig, ax, num_row, plot_energy_group=None, points_per_cm=4):
     radius_grid = RADIUS_GRID_8
     height_grid = HEIGHT_GRID_20

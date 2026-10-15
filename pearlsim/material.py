@@ -1,6 +1,9 @@
 import numpy as np
 from copy import deepcopy
 
+from pearlsim.nuclear_data import (ENDF7_V1, CoreConditions, ThermRegistry, mapped_carbon_silicon,
+                                  render_concentrations)
+
 TRANSPORT_NUCLIDES = []
 
 def get_cross_section_string(temperature):
@@ -112,12 +115,33 @@ class Material():
             self.concentrations.pop(key)
         return keys_to_remove
 
-    def write_input(self, triso_counter, static_fuel_mats, debug, volume=None, never_burn=False):
-        self.cross_section_str = get_cross_section_string(self.temperature)
+    def write_input(self, triso_counter, static_fuel_mats, debug, volume=None, never_burn=False,
+                    profile=ENDF7_V1, conditions=None, registry=None):
+        """Serpent cards for this material (and, for fuel, its TRISO layers and pebble universe).
+
+        With ``conditions`` None (v1 behaviour) every layer is written at
+        ``self.temperature``. Otherwise the kernel, coatings, matrix and dummy graphite
+        take their temperatures from ``conditions``. ``registry`` collects the S(a,b)
+        names used, so the caller can write the matching ``therm`` cards.
+        """
+        legacy = conditions is None
+        registry = registry or ThermRegistry(profile, conditions or CoreConditions())
+        is_graphite = "graph" in self.name
+        if legacy:
+            temperature = self.temperature
+        else:
+            temperature = conditions.dummy if is_graphite else conditions.kernel
+
+        def layer_temperature(layer):
+            if legacy:
+                return self.temperature
+            return conditions.matrix if layer == "matrix" else conditions.coating
+
+        self.cross_section_str = profile.suffix(temperature)
         self.fix_B11()
         self.merge_duplicates(debug)
         if self.density == "sum fix":
-            density_s = f"sum fix {self.cross_section_str[1:]} {round(self.temperature,3)}"
+            density_s = f"sum fix {self.cross_section_str[1:]} {round(temperature,3)}"
         else:
             density_s = self.density
         if debug >= 3:
@@ -129,31 +153,31 @@ class Material():
             rgb = (r%255, g%255, b%255)
         else:
             rgb = self.rgb
-        input_s = f"mat {self.name} {density_s} rgb {rgb[0]} {rgb[1]} {rgb[2]}  tmp {round(self.temperature,3)}"
-        if "graph" in self.name:
-            input_s += " moder  grph 6000\n"
+        input_s = f"mat {self.name} {density_s} rgb {rgb[0]} {rgb[1]} {rgb[2]}  tmp {round(temperature,3)}"
+        if is_graphite:
+            moder = registry.moder_text("dummy", temperature, mapped_carbon_silicon(self.concentrations, profile))
+            input_s += f" {moder}\n"
         elif volume is not None and not never_burn:
             input_s += f" burn 1 vol {volume}\n"
         elif volume is not None:
             input_s += f" vol {volume}\n"
         else:
             input_s += " burn 1 \n"
-        for key in self.concentrations.keys():
-            #if self.concentrations[key] > 0:
-            conc_str = f"  {key}    {self.concentrations[key]}\n".replace("<lib>", self.cross_section_str)
-            input_s += conc_str
+        input_s += render_concentrations(self.concentrations, profile, temperature)
         input_s += "\n"
 
         if "fuel" in self.name:
             for name in static_fuel_mats.keys():
                 other_mat = static_fuel_mats[name]
+                layer = "matrix" if name == "matrix" else "coating"
+                t_layer = layer_temperature(layer)
+                moder = registry.moder_text(layer, t_layer, mapped_carbon_silicon(other_mat.concentrations, profile),
+                                            sic=(name == "SiC"))
                 input_s += f"mat {self.name}_{name} {other_mat.density} rgb {rgb[0]} " \
                            f"{rgb[1]} " \
                            f"{rgb[2]} " \
-                           f"tmp {round(self.temperature,3)} moder  grph 6000\n"
-                for key in other_mat.concentrations.keys():
-                    conc_str = f"  {key}    {other_mat.concentrations[key]}\n".replace("<lib>", self.cross_section_str)
-                    input_s += conc_str
+                           f"tmp {round(t_layer,3)} {moder}\n"
+                input_s += render_concentrations(other_mat.concentrations, profile, t_layer)
                 input_s += "\n"
 
         # Write geometry for solid graphite pebble

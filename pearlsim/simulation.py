@@ -19,6 +19,8 @@ import pandas as pd
 
 from pearlsim.core import Core
 from pearlsim.material import Material
+from pearlsim.nuclear_data import ENDF7_V1, PROFILES
+from pearlsim.thermal import core_conditions, uncoupled_conditions
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +49,7 @@ class Simulation:
         self.debug = 0
         self.serpent_settings = {"pop": "10000 50 25"}
         self.base_seed = None  # set by set_seed; per-step generators derive from it
+        self.thermal_coupling = False
 
     # ------------------------------------------------------------------ deck parsing
 
@@ -158,6 +161,7 @@ class Simulation:
         elif serpent_flag == 3:
             self.core.update_from_bumat(self.debug, step=last_step)
             self.days += self.burnup_time_step
+            self.update_conditions()
             self.core.generate_input(self.serpent_settings_for_step(self.core.iteration),
                                      self.burnup_time_step, self.debug, cr_position=self.rod_insertion)
             self.core.save_zone_maps(f"zone_map{self.core.iteration}.json")
@@ -203,6 +207,14 @@ class Simulation:
         with open(f"{self.simulation_name}_simulation.pkl", "wb") as f:
             pickle.dump(self, f)
 
+    def _kw_set_nuclear_data(self, args):
+        if args[0] not in PROFILES:
+            raise ValueError(f"unknown nuclear-data profile {args[0]!r}; choose from {sorted(PROFILES)}")
+        self.core.nuclear_data = PROFILES[args[0]]
+
+    def _kw_set_thermal_coupling(self, args):
+        self.thermal_coupling = get_boolean(args[0])
+
     def _kw_set(self, args):
         setting, value = args[0], " ".join(args[1:])
         if value == "clear":
@@ -241,7 +253,28 @@ class Simulation:
             settings["seed"] = str(seed)
         return settings
 
+    def fuel_pebbles_in_core(self):
+        return sum(n for channel in self.core.zones for zone in channel
+                   for key, n in zone.inventory.items() if "fuel" in key)
+
+    def update_conditions(self):
+        """Set the component temperatures used to render this step's deck."""
+        if self.thermal_coupling:
+            # power per fuel pebble is normalised to an all-fuel core of this model's pebble count
+            self.core.conditions = core_conditions(float(self.power), self.fuel_pebbles_in_core(),
+                                                   nominal_pebbles=len(self.core.pebble_locations))
+        elif self.core.nuclear_data is not ENDF7_V1:
+            self.core.conditions = uncoupled_conditions()
+        else:
+            self.core.conditions = None  # v1 rendering
+
     def operating_parameters(self, graphite_insertion_fraction, serpent_seed=None):
+        conditions = self.core.conditions
+        temperatures = None if conditions is None else {
+            "kernel": conditions.kernel, "coating": conditions.coating, "matrix": conditions.matrix,
+            "pebble_graphite": conditions.pebble_graphite, "dummy": conditions.dummy,
+            "salt": conditions.salt, "reflector": conditions.reflector, "structure": conditions.structure,
+            "salt_density": conditions.salt_density}
         return {"power": float(self.power),
                 "burnup_step": self.burnup_time_step,
                 "graphite_insertion_fraction": graphite_insertion_fraction,
@@ -249,7 +282,10 @@ class Simulation:
                 "fima_discharge_threshold": self.fima_discharge_threshold,
                 "fima_discharge_rel_std": self.fima_discharge_rel_std,
                 "base_seed": self.base_seed,
-                "serpent_seed": serpent_seed}
+                "serpent_seed": serpent_seed,
+                "nuclear_data": self.core.nuclear_data.name,
+                "thermal_coupling": self.thermal_coupling,
+                "temperatures": temperatures}
 
     def run_step(self, serpent_flag, graphite_insertion_fraction):
         """Advance one depletion step after the core inventory has been updated.
@@ -263,6 +299,11 @@ class Simulation:
         zone_file_name = f"zone_map{iteration}.json"
         operating_file = f"{self.core.simulation_name}_operating_{iteration}.json"
         settings = self.serpent_settings_for_step(iteration)
+        self.update_conditions()
+        acelib = settings.get("acelib", "")
+        if self.core.nuclear_data is ENDF7_V1 and "endf8" in acelib or \
+                self.core.nuclear_data is not ENDF7_V1 and "endfb7" in acelib:
+            logger.warning("set acelib (%s) does not look like profile %s", acelib, self.core.nuclear_data.name)
 
         if serpent_flag == 0:
             if os.path.isfile(zone_file_name):

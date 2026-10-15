@@ -59,7 +59,8 @@ def test_insertion_sequence_end_to_end(tmp_path, fake_serpent_command, monkeypat
     serpent_seed = operating.pop("serpent_seed")
     assert operating == {"power": 1.0e6, "burnup_step": STEP_DAYS, "graphite_insertion_fraction": 0.5,
                          "control_rod_position": 300.0, "fima_discharge_threshold": 18.63,
-                         "fima_discharge_rel_std": 0.02288, "base_seed": 7}
+                         "fima_discharge_rel_std": 0.02288, "base_seed": 7,
+                         "nuclear_data": "endf7_v1", "thermal_coupling": False, "temperatures": None}
     assert f"set seed {serpent_seed}\n" in (run / "synthetic_5.serpent").read_text()
     seeds = {json.loads((run / f"synthetic_operating_{s}.json").read_text())["serpent_seed"] for s in range(1, 6)}
     assert len(seeds) == 5  # a different Serpent seed every step
@@ -158,3 +159,29 @@ def test_serpent_seed_per_step_unless_set_explicitly(sim):
     assert sim.serpent_settings_for_step(1) == sim.serpent_settings_for_step(1)
     sim.read_input_line("set seed 42")
     assert sim.serpent_settings_for_step(1)["seed"] == sim.serpent_settings_for_step(2)["seed"] == "42"
+
+
+@pytest.mark.e2e
+def test_endf8_thermal_coupling_end_to_end(tmp_path, fake_serpent_command, monkeypatch):
+    from pearlsim.nuclear_data import ENDF8_LIB80X, validate_deck
+
+    write_core(tmp_path)
+    lines = deck_lines(2)
+    lines.insert(lines.index("set_power 1.0E+06"), "set_nuclear_data endf8_lib80x")
+    lines.insert(lines.index("set_power 1.0E+06"), "set_thermal_coupling on")
+    (tmp_path / "case.inp").write_text("\n".join(lines) + "\n")
+    monkeypatch.setenv("FAKE_SERPENT_LOG", str(tmp_path / "serpent_log.jsonl"))
+    sim = Simulation("synthetic")
+    sim.serpent_command = fake_serpent_command
+    sim.cpu_cores = 2
+    sim.read_input_file("case.inp", directory_name="run")
+    run = tmp_path / "run"
+    for step in (1, 2):
+        deck = (run / f"synthetic_{step}.serpent").read_text()
+        assert validate_deck(deck, ENDF8_LIB80X) == []
+        operating = json.loads((run / f"synthetic_operating_{step}.json").read_text())
+        assert operating["nuclear_data"] == "endf8_lib80x" and operating["thermal_coupling"] is True
+        temps = operating["temperatures"]
+        # 1 MW of 280 MW: everything a little above the 823.15 K inlet; fuel hottest
+        assert 823.15 < temps["salt"] < temps["matrix"] < temps["kernel"] < 900
+        assert temps["structure"] == pytest.approx(823.15)

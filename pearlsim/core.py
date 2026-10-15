@@ -6,6 +6,7 @@ import pandas as pd
 import os
 import json
 from .get_fima import get_fima, heavy_metal_density
+from .nuclear_data import ENDF7_V1, CoreConditions, ThermRegistry, render_template
 import gzip
 
 BINNING_ATTEMPTS = 20
@@ -85,6 +86,10 @@ class Core():
         # recirculating pebbles that did not fit at the bottom; reinserted first next step
         self.held_inventory = {}
         self.always_remove_graphite = True
+        # nuclear-data profile and component temperatures used to render decks;
+        # conditions None = v1 behaviour (see pearlsim.nuclear_data)
+        self.nuclear_data = ENDF7_V1
+        self.conditions = None
         # numpy Generator for pebble assignment and shuffling; Simulation seeds it per step
         self.rng = np.random.default_rng()
 
@@ -479,7 +484,10 @@ class Core():
         return volumes
 
     def generate_input(self, serpent_settings, burnup_time_step, debug, cr_position):
-        input_str = self.core_geometry
+        marker = "%%PEARLSIM_THERM_CARDS%%"
+        conditions = self.conditions or CoreConditions()
+        registry = ThermRegistry(self.nuclear_data, conditions)
+        input_str = render_template(self.core_geometry, self.nuclear_data, conditions, registry, marker)
         input_str = input_str.replace("<insertion_position>", str(cr_position))
         input_str += f"dep daystep"
         for value in self.substep_schema:
@@ -499,7 +507,9 @@ class Core():
         triso_counter = 1
         for material in self.materials.values():
             if self.is_nonzero_in_core(material.name):
-                input_str += material.write_input(triso_counter, self.static_fuel_materials, debug)
+                input_str += material.write_input(triso_counter, self.static_fuel_materials, debug,
+                                                  profile=self.nuclear_data, conditions=self.conditions,
+                                                  registry=registry)
                 triso_counter += 1
 
 
@@ -516,6 +526,10 @@ class Core():
         
         
 
+        if marker in input_str:
+            input_str = input_str.replace(marker, registry.cards())
+        elif registry.cards():
+            raise ValueError("core template has no 'therm grph 900 gre6.18t gre6.20t' line to replace")
         with open(file_name, 'w') as f:
             f.write(input_str)
 

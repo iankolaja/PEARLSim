@@ -255,35 +255,27 @@ class Core():
             counts, bins = np.histogram(np.array(fima_values), bins=self.fuel_groups - 1 + num_attempts)
             num_assigned_bins = np.sum(counts > 0)
             num_attempts += 1
-            print(fima_values)
-            print(bins)
 
-        # Do one final histogram with nonzero bins removed so that group labels
-        # increase from 2 to the desired number of groups with no gaps
-        nonzero_bins_indices = np.where(counts != 0)[0]
-        nonzero_bins = bins[nonzero_bins_indices]
-        counts, bins = np.histogram(fima_values, bins=nonzero_bins)
-
+        # Group = rank of the occupied histogram bin a value falls in, starting at 2
+        # (group 1 is fresh fuel). Every occupied bin becomes a group, so no fuel is
+        # dropped (review #36: v1 lost fuel when only one bin was occupied, and
+        # dropped groups above fuel_groups when the binning overshot).
         if len(fima_values) > 0:
-            bins[-1] = bins[-1] + 1e-5  # Make sure the largest value is included in the last bin
-        group_assignments = np.digitize(fima_values, bins) + 1
-        print("fima_values")
-        print(fima_values)
-        print("final bins")
-        print(bins)
-        print("group assignments")
-        print(group_assignments)
+            bin_index = np.clip(np.searchsorted(bins, fima_values, side="right") - 1, 0, len(counts) - 1)
+            occupied = sorted(set(bin_index.tolist()))
+            group_of_bin = {b: rank + 2 for rank, b in enumerate(occupied)}
+            group_assignments = np.array([group_of_bin[b] for b in bin_index.tolist()])
+        else:
+            group_assignments = np.array([], dtype=int)
 
         # Go through each type of fuel (if applicable), and each group
         # as defined by binned isotope values
-        for g in range(2, 1 + self.fuel_groups):
-            print(f"group {g}")
+        for g in sorted(set(group_assignments.tolist())):
             for fuel_type in fuel_types:
                 grouped_materials = {}
                 total_group_pebbles = 0
 
                 pebbles_in_group = np.where(group_assignments == g)[0]
-                print(pebbles_in_group)
                 # Iterate through all pebbles in a group and select the ones
                 # of the fuel type currently being constructed
                 if len(pebbles_in_group) > 0:

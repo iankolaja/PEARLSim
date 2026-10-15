@@ -135,18 +135,35 @@ def _discharge_with_identical_burnup(core):
     return bin_
 
 
-def test_burnup_averaging_drops_fuel_with_identical_burnup(core):
-    """v1 behaviour (review #36): a single occupied histogram bin maps to group 1, which is never kept."""
-    bin_ = _discharge_with_identical_burnup(core)
-    core.volume_average_by_burnup(bin_)
-    assert bin_.inventory == {}
-
-
-@pytest.mark.xfail(strict=True, reason="review #36: identical-burnup discharge is dropped by burnup averaging")
 def test_burnup_averaging_keeps_fuel_with_identical_burnup(core):
+    """Review #36 (fixed): v1 dropped all fuel when only one histogram bin was occupied."""
     bin_ = _discharge_with_identical_burnup(core)
     core.volume_average_by_burnup(bin_)
-    assert sum(bin_.inventory.values()) == 18
+    assert bin_.inventory == {"avgdischarge_fuel20_G2": 18}
+
+
+@pytest.mark.parametrize("seed", range(25))
+def test_burnup_averaging_conserves_pebbles(core, seed):
+    """Every discharged fuel pebble ends up in exactly one averaged group (review #36)."""
+    rng = np.random.default_rng(seed)
+    fresh = core.fresh_pebbles["fuel20"].concentrations
+    bin_ = Out_Of_Core_Bin()
+    n_materials = int(rng.integers(1, 40))
+    # clustered burnups make the binning loop overshoot, which v1 truncated at fuel_groups
+    centres = rng.uniform(0.0, 0.2, size=3)
+    for i in range(n_materials):
+        burned = float(np.clip(rng.choice(centres) + rng.normal(0, 0.01), 0.0, 0.25))
+        name = f"discharge_fuel20_R1Z3G{i + 1}"
+        conc = dict(fresh)
+        conc["92235<lib>"] *= 1 - burned
+        conc["92238<lib>"] *= 1 - burned
+        core.materials[name] = Material(name, conc)
+        bin_.inventory[name] = int(rng.integers(1, 50))
+    total = sum(bin_.inventory.values())
+    core.volume_average_by_burnup(bin_)
+    assert sum(bin_.inventory.values()) == total
+    groups = sorted(int(k.rsplit("G", 1)[1]) for k in bin_.inventory)
+    assert groups == list(range(2, 2 + len(groups)))  # consecutive labels from 2
 
 
 def test_material_json_gz_round_trip(core, tmp_path):

@@ -168,3 +168,15 @@ def test_validator_flags_inconsistencies():
     assert any("6012.01c" in p for p in problems)
     assert any("natural carbon" in p for p in problems)
     assert any("outside" in p for p in problems)
+
+
+ENDF8_XSDATA = "/global/scratch/users/ikolaja/PEARLSim_dev/xsdata/endf8_pearlsim.xsdata"
+
+
+@pytest.mark.skipif(not __import__("os").path.exists(ENDF8_XSDATA), reason="private ENDF/B-VIII.0 xsdata not built")
+@pytest.mark.parametrize("power", [0.0, 1e6, 140e6, 280e6])
+def test_v2_deck_entries_exist_in_private_xsdata(tmp_path, power):
+    from pearlsim.nuclear_data import missing_library_entries
+
+    _, deck = render_v2(tmp_path, power=power)
+    assert missing_library_entries(deck, ENDF8_XSDATA) == []

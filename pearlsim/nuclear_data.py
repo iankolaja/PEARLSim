@@ -325,3 +325,15 @@ def validate_deck(text, profile):
         elif not line.strip():
             current, expected = None, None
     return problems
+
+
+def missing_library_entries(deck_text, xsdata_path):
+    """Nuclide IDs (``ZA.xxc``) and S(a,b) tables used by a deck but absent from an xsdata index."""
+    with open(xsdata_path) as f:
+        available = {line.split()[0] for line in f if line.strip()}
+    used = set(re.findall(r"^\s+(\d+\.\d\dc)\s", deck_text, re.M))
+    for line in deck_text.splitlines():
+        tokens = line.split()
+        if tokens[:1] == ["therm"] and len(tokens) == 5:
+            used.update(tokens[3:5])
+    return sorted(used - available)

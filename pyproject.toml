@@ -1,0 +1,56 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pearlsim"
+version = "0.2.0.dev0"
+description = "Pebble-Explicit Advanced Reactor Learning Simulator: zone-based PBR depletion with Serpent 2 and ML core-state models"
+readme = "README.md"
+license = { text = "MIT" }
+authors = [{ name = "I. Kolaja", email = "ikolaja@berkeley.edu" }]
+requires-python = ">=3.10"
+# Versions pinned to the environment that generated the v1 dataset until the
+# characterization tests are in place; relaxed deliberately in later phases.
+dependencies = [
+    "numpy==1.24.4",
+    "pandas==2.1.2",
+    "scipy==1.11.3",
+    "scikit-learn==1.5.1",
+    "matplotlib==3.9.1",
+]
+
+[project.optional-dependencies]
+ml = ["torch"]
+data = ["pyarrow", "pyyaml"]
+dev = ["pytest", "ruff"]
+
+[project.urls]
+Repository = "https://github.com/iankolaja/PEARLSim"
+
+[tool.setuptools.packages.find]
+include = ["pearlsim*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["tests"]
+xfail_strict = true
+addopts = "-ra --strict-markers -m 'not serpent and not torch'"
+markers = [
+    "serpent: runs the real Serpent executable (batch jobs only)",
+    "torch: imports torch (slow import)",
+    "e2e: end-to-end simulation through the fake Serpent executable",
+    "characterization: pins v1 behaviour, including known bugs",
+]
+
+[tool.ruff]
+line-length = 110
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E9", "F", "B", "I"]
+
+[tool.ruff.lint.per-file-ignores]
+# Legacy v1 modules: star imports, bare excepts and unused names are cleaned up in Phase A.
+"pearlsim/*.py" = ["F401", "F403", "F405", "F541", "F811", "F821", "F841", "E722", "B006", "B007", "B008", "B018", "B023", "B904", "B905", "I001"]
+"PEARLSim.py" = ["F401", "I001"]

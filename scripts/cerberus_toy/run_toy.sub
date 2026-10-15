@@ -1,0 +1,31 @@
+#!/bin/sh
+# Cerberus pebble-parking toy test: reference runs, live sessions and a 3 M-pebble scale run.
+# Build the inputs first (on the login node is fine):
+#   ~/envs/pearlsim/bin/python scripts/cerberus_toy/build_toy.py $TOY --scale-pebbles 3000000
+# then submit from the PEARLSim directory:
+#   sbatch --export=ALL,TOY=/global/scratch/users/ikolaja/PEARLSim_dev/cerberus_toy scripts/cerberus_toy/run_toy.sub
+# Results: $TOY/results.json (written part by part). If preempted and requeued, the driver
+# simply reruns all parts.
+#SBATCH --job-name=cerberus_toy
+#SBATCH --output=slurm_cerberus_toy_%j.out
+#SBATCH --partition=savio4_htc
+#SBATCH --time=06:00:00
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=16
+#SBATCH --qos=savio_lowprio
+#SBATCH -A co_nuclear
+#SBATCH --requeue
+
+module unload python gcc cmake
+# same environment as the most recent v1 PEARLSim jobs (gFHR_sequence_training_job2.sub)
+module load cmake/3.27.7 gcc/11.4.0 openmpi/4.1.6 python/3.11.6-gcc-11.4.0
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/global/home/groups/co_nuclear/gd_library/code/lib
+export LIBRARY_PATH=$LIBRARY_PATH:/global/home/groups/co_nuclear/gd_library/code/lib
+export CPATH=$CPATH:/global/home/groups/co_nuclear/gd_library/code/include
+export PYTHONPATH=/global/home/groups/co_nuclear/HxF_tools/Cerberus_HxF:/global/home/groups/co_nuclear/HxF_tools/KrakenTools_HxF
+export PYTHONDONTWRITEBYTECODE=1
+export MPLBACKEND=Agg
+~/envs/pearlsim/bin/python scripts/cerberus_toy/driver.py "$TOY" \
+    --exe /global/home/groups/co_nuclear/HxF_tools/serpent2.2.0_HxF_dev_wolibgd/sss2 \
+    --omp $SLURM_CPUS_PER_TASK

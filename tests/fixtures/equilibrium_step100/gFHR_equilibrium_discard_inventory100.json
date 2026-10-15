@@ -1,0 +1,18 @@
+{
+ "discharge_fuel20_R1Z10G8": {
+  "FIMA": 2.541265641775427,
+  "count": 793
+ },
+ "discharge_fuel20_R2Z10G8": {
+  "FIMA": 2.222679561479962,
+  "count": 794
+ },
+ "discharge_fuel20_R3Z10G8": {
+  "FIMA": 1.9388717106888365,
+  "count": 788
+ },
+ "discharge_fuel20_R4Z10G8": {
+  "FIMA": 2.162479742104077,
+  "count": 746
+ }
+}

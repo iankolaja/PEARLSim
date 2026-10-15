@@ -1,0 +1,162 @@
+{
+ "discharge_fuel20_R1Z10G1": {
+  "FIMA": 2.5540334372650775,
+  "FIMA_last_pass": 2.5540334372650775,
+  "count": 784
+ },
+ "discharge_fuel20_R1Z10G2": {
+  "FIMA": 2.5503649600562226,
+  "FIMA_last_pass": 2.550364960056208,
+  "count": 786
+ },
+ "discharge_fuel20_R1Z10G3": {
+  "FIMA": 2.558536145116508,
+  "FIMA_last_pass": 2.558536145116508,
+  "count": 787
+ },
+ "discharge_fuel20_R1Z10G4": {
+  "FIMA": 2.542934694997432,
+  "FIMA_last_pass": 2.542934694997432,
+  "count": 792
+ },
+ "discharge_fuel20_R1Z10G5": {
+  "FIMA": 2.5344506271418283,
+  "FIMA_last_pass": 2.5344506271418137,
+  "count": 794
+ },
+ "discharge_fuel20_R1Z10G6": {
+  "FIMA": 2.547691783110066,
+  "FIMA_last_pass": 2.547691783110066,
+  "count": 792
+ },
+ "discharge_fuel20_R1Z10G7": {
+  "FIMA": 2.52504867803851,
+  "FIMA_last_pass": 2.525048678038481,
+  "count": 793
+ },
+ "discharge_fuel20_R1Z10G8": {
+  "FIMA": 2.541265641775427,
+  "FIMA_last_pass": 2.541265641775398,
+  "count": 793
+ },
+ "discharge_fuel20_R2Z10G1": {
+  "FIMA": 2.250997084164036,
+  "FIMA_last_pass": 2.250997084164036,
+  "count": 784
+ },
+ "discharge_fuel20_R2Z10G2": {
+  "FIMA": 2.2233252964542674,
+  "FIMA_last_pass": 2.2233252964542527,
+  "count": 785
+ },
+ "discharge_fuel20_R2Z10G3": {
+  "FIMA": 2.230383229148637,
+  "FIMA_last_pass": 2.230383229148637,
+  "count": 784
+ },
+ "discharge_fuel20_R2Z10G4": {
+  "FIMA": 2.2355184106873245,
+  "FIMA_last_pass": 2.2355184106873245,
+  "count": 793
+ },
+ "discharge_fuel20_R2Z10G5": {
+  "FIMA": 2.247220670056551,
+  "FIMA_last_pass": 2.2472206700565365,
+  "count": 794
+ },
+ "discharge_fuel20_R2Z10G6": {
+  "FIMA": 2.273941538308934,
+  "FIMA_last_pass": 2.273941538308934,
+  "count": 789
+ },
+ "discharge_fuel20_R2Z10G7": {
+  "FIMA": 2.2344192869215633,
+  "FIMA_last_pass": 2.234419286921534,
+  "count": 793
+ },
+ "discharge_fuel20_R2Z10G8": {
+  "FIMA": 2.222679561479962,
+  "FIMA_last_pass": 2.2226795614799326,
+  "count": 794
+ },
+ "discharge_fuel20_R3Z10G1": {
+  "FIMA": 1.9514935744297055,
+  "FIMA_last_pass": 1.9514935744297055,
+  "count": 786
+ },
+ "discharge_fuel20_R3Z10G2": {
+  "FIMA": 1.9956956432944537,
+  "FIMA_last_pass": 1.995695643294439,
+  "count": 783
+ },
+ "discharge_fuel20_R3Z10G3": {
+  "FIMA": 1.9624097221661605,
+  "FIMA_last_pass": 1.9624097221661605,
+  "count": 778
+ },
+ "discharge_fuel20_R3Z10G4": {
+  "FIMA": 1.979848175143923,
+  "FIMA_last_pass": 1.979848175143923,
+  "count": 787
+ },
+ "discharge_fuel20_R3Z10G5": {
+  "FIMA": 2.0032366946208824,
+  "FIMA_last_pass": 2.0032366946208677,
+  "count": 788
+ },
+ "discharge_fuel20_R3Z10G6": {
+  "FIMA": 1.9734792904246867,
+  "FIMA_last_pass": 1.9734792904246867,
+  "count": 785
+ },
+ "discharge_fuel20_R3Z10G7": {
+  "FIMA": 1.9710711662443976,
+  "FIMA_last_pass": 1.9710711662443683,
+  "count": 789
+ },
+ "discharge_fuel20_R3Z10G8": {
+  "FIMA": 1.9388717106888365,
+  "FIMA_last_pass": 1.9388717106888071,
+  "count": 788
+ },
+ "discharge_fuel20_R4Z10G1": {
+  "FIMA": 2.162863496989061,
+  "FIMA_last_pass": 2.162863496989061,
+  "count": 741
+ },
+ "discharge_fuel20_R4Z10G2": {
+  "FIMA": 2.167772002481297,
+  "FIMA_last_pass": 2.1677720024812825,
+  "count": 742
+ },
+ "discharge_fuel20_R4Z10G3": {
+  "FIMA": 2.1698480873400015,
+  "FIMA_last_pass": 2.1698480873400015,
+  "count": 738
+ },
+ "discharge_fuel20_R4Z10G4": {
+  "FIMA": 2.168215625929282,
+  "FIMA_last_pass": 2.168215625929282,
+  "count": 746
+ },
+ "discharge_fuel20_R4Z10G5": {
+  "FIMA": 2.1968824088337007,
+  "FIMA_last_pass": 2.196882408833686,
+  "count": 750
+ },
+ "discharge_fuel20_R4Z10G6": {
+  "FIMA": 2.164220694656151,
+  "FIMA_last_pass": 2.164220694656151,
+  "count": 746
+ },
+ "discharge_fuel20_R4Z10G7": {
+  "FIMA": 2.2072896376740045,
+  "FIMA_last_pass": 2.2072896376739752,
+  "count": 746
+ },
+ "discharge_fuel20_R4Z10G8": {
+  "FIMA": 2.162479742104077,
+  "FIMA_last_pass": 2.162479742104048,
+  "count": 746
+ }
+}

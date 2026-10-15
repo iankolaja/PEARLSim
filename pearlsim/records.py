@@ -11,11 +11,15 @@ Serpent step) and v1 runs gathered after the fact:
 * per replica, ``<deck>_res.m`` and ``<deck>_det<k>.m`` (k = last burnup point);
 * ``<sim>_replica_spread_<i>.json`` for n > 1.
 
-Mesh detector results are volume integrals (docs/serpent/detectors.md). The
-subzone mesh (8 radial x 20 axial) has equal-area rings and equal heights, so its
-cells have equal volume: peaking factors are max/mean of the cell values, and the
-4 x 10 zone powers are exact 2 x 2 block sums (the zone grid's bounds are every
-second subzone bound; group_definitions.RADIUS_GRID_4/HEIGHT_GRID_10).
+Mesh units: Serpent writes mesh detector results integrated over each cell
+(docs/serpent/detectors.md); the subzone power mesh (``dr -8 void``, fission
+energy production normalised by ``set power``) is in W. ``read_det_file`` divides
+every value by the cell's geometric volume, so the meshes here (and the v1
+``fluxR*Z*E*``/``powerR*Z*`` columns) are cell averages: power in W/cm3, flux in
+n/cm2/s. ``power.mesh_power_W`` multiplies the volumes back. The subzone mesh
+(8 radial x 20 axial) has equal-area rings and equal heights, so its cells have
+equal volume (87 500.6 cm3); the 4 x 10 zone powers are 2 x 2 block sums (the zone
+grid's bounds are every second subzone bound; group_definitions.RADIUS_GRID_4/HEIGHT_GRID_10).
 """
 
 import json
@@ -103,18 +107,39 @@ def _mesh_block(runs, name):
     return {"data": mean, "unc": unc, "replica_std": std if len(runs) > 1 else None}
 
 
-def power_summary(power):
-    """Zone powers and peaking factors from the (8, 20) subzone power mesh (equal-volume cells)."""
-    power = np.asarray(power, dtype=float)
+def cell_volumes(radius_grid, height_grid):
+    """Volumes (cm3) of the cells of a cylindrical r-z mesh, shape (len(radius_grid)-1, len(height_grid)-1)."""
+    radius_grid, height_grid = np.asarray(radius_grid, dtype=float), np.asarray(height_grid, dtype=float)
+    return np.outer(np.pi * np.diff(radius_grid ** 2), np.diff(height_grid))
+
+
+def power_summary(power_density, volumes=None):
+    """Mesh power, zone power fractions and peaking factors from the (8, 20) subzone power density (W/cm3).
+
+    Peaking factors are ratios of volume-averaged power densities (max over mean).
+    """
+    from pearlsim.group_definitions import HEIGHT_GRID_20, RADIUS_GRID_8
+
+    density = np.asarray(power_density, dtype=float)
+    volumes = cell_volumes(RADIUS_GRID_8, HEIGHT_GRID_20) if volumes is None else np.asarray(volumes, dtype=float)
+    power = density * volumes  # W per cell
     total = power.sum()
-    zone = power.reshape(4, 2, 10, 2).sum(axis=(1, 3))
-    radial, axial = power.sum(axis=1), power.sum(axis=0)
-    return {"mesh_sum": float(total),  # detector units (not W; see docs/serpent/detectors.md)
-            "zone_power_fraction": (zone / total).tolist() if total else None,
-            "peaking_mesh": float(power.max() / power.mean()) if total else None,
-            "peaking_radial": float(radial.max() / radial.mean()) if total else None,
-            "peaking_axial": float(axial.max() / axial.mean()) if total else None,
-            "peaking_zone": float(zone.max() / zone.mean()) if total else None}
+    if not total:
+        return {"mesh_power_W": 0.0, "zone_power_fraction": None, "peaking_mesh": None,
+                "peaking_radial": None, "peaking_axial": None, "peaking_zone": None}
+
+    def peaking(cell_power, cell_volume):
+        averaged = cell_power / cell_volume
+        return float(averaged.max() / (cell_power.sum() / cell_volume.sum()))
+
+    zone_power = power.reshape(4, 2, 10, 2).sum(axis=(1, 3))
+    zone_volume = volumes.reshape(4, 2, 10, 2).sum(axis=(1, 3))
+    return {"mesh_power_W": float(total),
+            "zone_power_fraction": (zone_power / total).tolist(),
+            "peaking_mesh": peaking(power, volumes),
+            "peaking_radial": peaking(power.sum(axis=1), volumes.sum(axis=1)),
+            "peaking_axial": peaking(power.sum(axis=0), volumes.sum(axis=0)),
+            "peaking_zone": peaking(zone_power, zone_volume)}
 
 
 def inventory_summary(zone_map, held=None):
@@ -219,6 +244,10 @@ def build_record(directory, run_name, step, num_replicas=None, days=None, proven
             spread_summary[f"max_rel_std_{nuclide.replace('<lib>', '')}"] = max(values) if values else None
 
     flux, power = _mesh_block(runs, "subzone_3group_flux"), _mesh_block(runs, "subzone_power")
+    power_block = power_summary(power["data"][:, :, 0])
+    if isinstance(controls["power"], float) and controls["power"]:
+        # fission energy scored in the mesh over the normalisation power (TOT_POWER); close to 1
+        power_block["mesh_power_over_set_power"] = power_block["mesh_power_W"] / controls["power"]
     as_list = lambda block: {k: None if v is None else np.asarray(v).tolist() for k, v in block.items()}  # noqa: E731
     return {
         "schema_version": SCHEMA_VERSION,
@@ -233,7 +262,7 @@ def build_record(directory, run_name, step, num_replicas=None, days=None, proven
                   "serpent_seed_in_output": [run["serpent"].get("SEED") for run in runs]},
         "replicas": num_replicas,
         "keff": {"bos": _k_block(runs, 0), "eos": _k_block(runs, -1)},
-        "power": power_summary(power["data"][:, :, 0]),
+        "power": power_block,
         "meshes": {"subzone_3group_flux": as_list(flux), "subzone_power": as_list(power),
                    "det_file": runs[0]["det_file"]},
         "inventory": inventory,
@@ -269,8 +298,9 @@ def flatten(record, meshes=True):
             row[f"keff_{point}_rep{r}"] = value
     row["final_analog_keff"] = record["keff"]["eos"]["mean"]  # v1 name of the target
     power = record["power"]
-    for key in ("peaking_mesh", "peaking_radial", "peaking_axial", "peaking_zone"):
-        row[key] = power[key]
+    for key in ("mesh_power_W", "mesh_power_over_set_power", "peaking_mesh", "peaking_radial", "peaking_axial",
+                "peaking_zone"):
+        row[key] = power.get(key)
     if power["zone_power_fraction"] is not None:
         for r, column in enumerate(power["zone_power_fraction"]):
             for z, value in enumerate(column):

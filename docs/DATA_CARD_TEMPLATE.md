@@ -45,7 +45,9 @@ and its `.meta.json`; don't type them by hand.
   - provenance: `serpent_version`, `serpent_pop`, `running_time_min`, ….
 - **Full records** (`<sim>_record_<i>.json`) also hold mesh uncertainties and replica spreads.
 - **Units:** power W; time days; temperatures K; k_eff dimensionless; reactivity pcm.
-  The power mesh is in Serpent detector units (not W): use ratios only.
+  Mesh columns are cell averages: `powerR*Z*` in W/cm³ and `fluxR*Z*E*` in n/cm²/s (Serpent's
+  per-cell integrals divided by the cell volume, 87,500.6 cm³ for every subzone cell).
+  `mesh_power_W` is the fission power scored in the mesh.
 
 ## Known limitations
 - Zone-averaged depletion: pebbles in a zone share one composition; replicas average the

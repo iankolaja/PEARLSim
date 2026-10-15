@@ -40,6 +40,9 @@ def test_v1_record_from_output_files(equilibrium_dir, expected):
     assert record["discharge"]["avg_FIMA"] == pytest.approx(expected["lstm_input_features"]["avg_FIMA"])
     mesh = np.asarray(record["meshes"]["subzone_power"]["data"])[:, :, 0]
     assert mesh[0, 0] == expected["power_mesh"][0][0][0]
+    # Serpent's mesh is in W integrated per cell; the reader divides by cell volume (W/cm3)
+    assert record["power"]["mesh_power_W"] == pytest.approx(279448182.0, rel=1e-8)  # raw det1 sum
+    assert record["power"]["mesh_power_over_set_power"] == pytest.approx(0.998029, abs=1e-6)
     zone = np.asarray(record["power"]["zone_power_fraction"])
     assert zone.shape == (4, 10) and zone.sum() == pytest.approx(1.0)
     assert zone[1, 3] == pytest.approx(mesh[2:4, 6:8].sum() / mesh.sum())
@@ -50,7 +53,7 @@ def test_power_summary_on_known_mesh():
     power = np.ones((8, 20))
     power[0, 0] = 5.0
     summary = records.power_summary(power)
-    assert summary["mesh_sum"] == 164.0
+    assert summary["mesh_power_W"] == pytest.approx(164.0 * 87500.581065579)
     assert summary["peaking_mesh"] == pytest.approx(5.0 / (164 / 160))
     assert summary["peaking_radial"] == pytest.approx(24.0 / (164 / 8))
     assert summary["peaking_axial"] == pytest.approx(12.0 / (164 / 20))

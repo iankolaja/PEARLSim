@@ -46,6 +46,7 @@ class Simulation:
         self.fima_discharge_rel_std = 0.02576
         self.debug = 0
         self.serpent_settings = {"pop": "10000 50 25"}
+        self.base_seed = None  # set by set_seed; per-step generators derive from it
 
     # ------------------------------------------------------------------ deck parsing
 
@@ -105,8 +106,10 @@ class Simulation:
 
     def _kw_set_seed(self, args):
         seed = int(args[0])
+        self.base_seed = seed
         random.seed(seed)
         np.random.seed(seed)
+        self.core.rng = self.step_rng(self.core.iteration, stream="setup")
         logger.info("Set random seed to %d", seed)
 
     def _kw_set_substep_schema(self, args):
@@ -128,7 +131,7 @@ class Simulation:
         insertion_ratios = {key: float(value) for key, value in _pairs(args[1:])}
         for channel in self.core.zones:
             for zone in channel:
-                zone.initialize(insertion_ratios, debug=self.debug)
+                zone.initialize(insertion_ratios, debug=self.debug, rng=self.core.rng)
                 self.core.initialize_materials(zone.inventory)
 
     def _kw_insertion(self, args):
@@ -137,6 +140,7 @@ class Simulation:
         serpent_flag = int(args[2])
         insertion_ratios, insertion_dict = get_insertion_ratio_pairs(args[3:])
         for _ in range(num_steps):
+            self.core.rng = self.step_rng(self.core.iteration)
             self.core.insert(insertion_ratios, self.fima_discharge_threshold,
                              self.fima_discharge_rel_std, debug=self.debug)
             self.run_step(serpent_flag, insertion_dict.get("graphpeb", 0.0))
@@ -145,6 +149,7 @@ class Simulation:
         serpent_flag = int(args[0])
         last_step = len(self.core.substep_schema)
         if serpent_flag == 1:
+            self.core.rng = self.step_rng(self.core.iteration)
             self.run_step(1, "static")
         elif serpent_flag == 2:
             self.core.update_from_bumat(self.debug, step=last_step)
@@ -153,8 +158,8 @@ class Simulation:
         elif serpent_flag == 3:
             self.core.update_from_bumat(self.debug, step=last_step)
             self.days += self.burnup_time_step
-            self.core.generate_input(self.serpent_settings, self.burnup_time_step, self.debug,
-                                     cr_position=self.rod_insertion)
+            self.core.generate_input(self.serpent_settings_for_step(self.core.iteration),
+                                     self.burnup_time_step, self.debug, cr_position=self.rod_insertion)
             self.core.save_zone_maps(f"zone_map{self.core.iteration}.json")
             self.core.iteration += 1
         else:
@@ -209,13 +214,42 @@ class Simulation:
 
     # ------------------------------------------------------------------ steps
 
-    def operating_parameters(self, graphite_insertion_fraction):
+    _STREAMS = {"shuffle": 0, "serpent": 1, "setup": 2}
+
+    def _seed_sequence(self, iteration, stream, replica=0):
+        return np.random.SeedSequence([self.base_seed, iteration, replica, self._STREAMS[stream]])
+
+    def step_rng(self, iteration, replica=0, stream="shuffle"):
+        """Generator for pebble assignment and shuffling in one step.
+
+        With set_seed, it depends only on (seed, iteration, replica), so any step
+        can be reproduced or resumed without replaying earlier steps.
+        Without set_seed it is unseeded.
+        """
+        if self.base_seed is None:
+            return np.random.default_rng()
+        return np.random.default_rng(self._seed_sequence(iteration, stream, replica))
+
+    def serpent_settings_for_step(self, iteration, replica=0):
+        """Serpent 'set' options for one step.
+
+        With set_seed and no explicit 'set seed', each step gets its own Serpent seed.
+        """
+        settings = dict(self.serpent_settings)
+        if self.base_seed is not None and "seed" not in settings:
+            seed = int(self._seed_sequence(iteration, "serpent", replica).generate_state(1)[0] % (2**31 - 1)) + 1
+            settings["seed"] = str(seed)
+        return settings
+
+    def operating_parameters(self, graphite_insertion_fraction, serpent_seed=None):
         return {"power": float(self.power),
                 "burnup_step": self.burnup_time_step,
                 "graphite_insertion_fraction": graphite_insertion_fraction,
                 "control_rod_position": self.rod_insertion,
                 "fima_discharge_threshold": self.fima_discharge_threshold,
-                "fima_discharge_rel_std": self.fima_discharge_rel_std}
+                "fima_discharge_rel_std": self.fima_discharge_rel_std,
+                "base_seed": self.base_seed,
+                "serpent_seed": serpent_seed}
 
     def run_step(self, serpent_flag, graphite_insertion_fraction):
         """Advance one depletion step after the core inventory has been updated.
@@ -228,6 +262,7 @@ class Simulation:
         bumat_name = f"{self.simulation_name}_{iteration}.serpent.bumat{last_step}"
         zone_file_name = f"zone_map{iteration}.json"
         operating_file = f"{self.core.simulation_name}_operating_{iteration}.json"
+        settings = self.serpent_settings_for_step(iteration)
 
         if serpent_flag == 0:
             if os.path.isfile(zone_file_name):
@@ -239,13 +274,13 @@ class Simulation:
             return
         if serpent_flag == 2 and os.path.isfile(bumat_name):
             logger.info("%s exists; reusing Serpent results for step %d", bumat_name, iteration)
-            self.core.save_operating_parameters(operating_file,
-                                                self.operating_parameters(graphite_insertion_fraction))
+            self.core.save_operating_parameters(
+                operating_file, self.operating_parameters(graphite_insertion_fraction, settings.get("seed")))
         elif serpent_flag in (1, 2):
-            input_name = self.core.generate_input(self.serpent_settings, self.burnup_time_step, self.debug,
+            input_name = self.core.generate_input(settings, self.burnup_time_step, self.debug,
                                                   cr_position=self.rod_insertion)
-            self.core.save_operating_parameters(operating_file,
-                                                self.operating_parameters(graphite_insertion_fraction))
+            self.core.save_operating_parameters(
+                operating_file, self.operating_parameters(graphite_insertion_fraction, settings.get("seed")))
             self.run_serpent(input_name)
             if not os.path.isfile(bumat_name):
                 raise SerpentError(f"Serpent finished without writing {bumat_name}")

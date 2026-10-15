@@ -1,7 +1,6 @@
 from .zone import Zone, Out_Of_Core_Bin
 from .material import Material
 import numpy as np
-import random
 from copy import deepcopy
 import pandas as pd
 import os
@@ -65,6 +64,8 @@ class Core():
         self.discharge_inventory = Out_Of_Core_Bin()
         self.reinsert_inventory = Out_Of_Core_Bin()
         self.always_remove_graphite = True
+        # numpy Generator for pebble assignment and shuffling; Simulation seeds it per step
+        self.rng = np.random.default_rng()
 
     def define_zones(self, zone_file, pebble_file, debug=0):
         with open(zone_file, 'r') as zone_f:
@@ -170,7 +171,7 @@ class Core():
                 print(f"Propagating materials up radial channel {r_zone}...")
             # Starting from the top, move materials from the zone directly below
             for z_zone in reversed(range(1, num_axial_zones)):
-                rename_map = self.zones[r_zone][z_zone].propagate_from(self.zones[r_zone][z_zone - 1])
+                rename_map = self.zones[r_zone][z_zone].propagate_from(self.zones[r_zone][z_zone - 1], self.rng)
                 self.rename_materials(rename_map)
             num_bottom_zone_pebbles += self.zones[r_zone][0].num_pebbles
 
@@ -215,7 +216,7 @@ class Core():
         if debug >= 1:
             print(f"Inserting pebbles at bottom of core...")
         for r_zone in range(num_radial_channels):
-            rename_map = self.zones[r_zone][0].insert(insert_pebbles, reinsert_fracs)
+            rename_map = self.zones[r_zone][0].insert(insert_pebbles, reinsert_fracs, self.rng)
             self.rename_materials(rename_map)
             for mat_name in self.zones[r_zone][0].inventory.keys():                 
                 material_conc = self.materials[mat_name].concentrations
@@ -360,7 +361,7 @@ class Core():
         for r_zone in range(num_radial_channels):
             num_axial_zones = len(self.axial_zone_bounds[r_zone]) + 1
             for z_zone in range(num_axial_zones):
-                pebble_s, zone_inventory = self.zones[r_zone][z_zone].shuffle_pebbles(self.pebble_radius)
+                pebble_s, zone_inventory = self.zones[r_zone][z_zone].shuffle_pebbles(self.pebble_radius, self.rng)
                 pebble_text += pebble_s
                 assigned_pebbles = pd.concat([assigned_pebbles, zone_inventory])
         with open(filename, 'w') as f:

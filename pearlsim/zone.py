@@ -1,9 +1,13 @@
 import pandas as pd
-import random
 import numpy as np
 import json
 from .get_fima import get_fima
 from scipy.stats import norm
+
+
+def _rng(rng):
+    """Use the given numpy Generator, or a fresh unseeded one."""
+    return rng if rng is not None else np.random.default_rng()
 
 
 def _get_fuel_type(mat_name):
@@ -38,7 +42,7 @@ class Zone():
         self.num_pebbles_assigned = 0
         self.inventory = {}
 
-    def initialize(self, insertion_fractions, debug=0):
+    def initialize(self, insertion_fractions, debug=0, rng=None):
         self.num_pebbles = len(self.pebble_locations)
         self.pebble_locations = pd.DataFrame(self.pebble_locations, columns=["x", "y", "z", "r"])
         self.inventory = {}
@@ -51,7 +55,8 @@ class Zone():
             #    mat_name = f"{key}_R{self.radial_num}Z{self.axial_num}"
             #    self.inventory[mat_name] = int(round(self.num_pebbles * insertion_fractions[key]))
         while sum(self.inventory.values()) < self.num_pebbles:
-            self.inventory[random.choice(list(self.inventory.keys()))] += 1
+            keys = list(self.inventory.keys())
+            self.inventory[keys[_rng(rng).integers(len(keys))]] += 1
         if debug >= 1:
             self.print_status()
 
@@ -88,22 +93,21 @@ class Zone():
                 self.inventory[mat_name] = 0
         return removed_pebbles
 
-    def random_assign_remaining(self):
-        random_options = {}
-        for key in self.inventory.keys():
-            random_options[key] = self.inventory[key]
+    def random_assign_remaining(self, rng=None):
+        rng = _rng(rng)
+        keys = list(self.inventory.keys())
+        weights = np.array([self.inventory[k] for k in keys], dtype=float)
         while self.num_pebbles > sum(self.inventory.values()):
-            key = random.choices(list(random_options.keys()),
-                                 weights=list(random_options.values()))[0]
+            key = keys[rng.choice(len(keys), p=weights / weights.sum())]
             self.inventory[key] += 1
 
-    def propagate_from(self, other_zone):
+    def propagate_from(self, other_zone, rng=None):
         other_fraction = other_zone.get_fractions()
         rename_map = self.set_fractions(other_fraction, reset=True)
-        self.random_assign_remaining()
+        self.random_assign_remaining(rng)
         return rename_map
 
-    def insert(self, insert_fracs, reinsert_inventory):
+    def insert(self, insert_fracs, reinsert_inventory, rng=None):
         self.reset()
         rename_map = {}
         for instruction in insert_fracs:
@@ -115,7 +119,7 @@ class Zone():
             else:
                 rename_step = self.set_fractions({insert_name: insert_amount})
             rename_map.update(rename_step)
-        self.random_assign_remaining()
+        self.random_assign_remaining(rng)
         return rename_map
 
     def print_status(self):
@@ -125,12 +129,12 @@ class Zone():
         status_s += str(self.get_fractions(as_str=True))
         print(status_s)
 
-    def shuffle_pebbles(self, peb_radius):
+    def shuffle_pebbles(self, peb_radius, rng=None):
         pebble_s = ""
         pebble_choices = []
         for key in self.inventory.keys():
             pebble_choices += [key] * self.inventory[key]
-        assignments = np.random.choice(pebble_choices, self.num_pebbles, replace=False)
+        assignments = _rng(rng).permutation(pebble_choices)[:self.num_pebbles]
         self.pebble_locations["material"] = assignments
         for i in range(len(self.pebble_locations)):
             peb = self.pebble_locations.iloc[i]

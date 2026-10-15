@@ -56,9 +56,13 @@ def test_insertion_sequence_end_to_end(tmp_path, fake_serpent_command, monkeypat
     zone_map = json.loads((run / "zone_map5.json").read_text())
     assert any(k.startswith("fuel20_R1Z1G") and not k.endswith("G1") for k in zone_map["zoneR1Z1"])
     operating = json.loads((run / "synthetic_operating_5.json").read_text())
+    serpent_seed = operating.pop("serpent_seed")
     assert operating == {"power": 1.0e6, "burnup_step": STEP_DAYS, "graphite_insertion_fraction": 0.5,
                          "control_rod_position": 300.0, "fima_discharge_threshold": 18.63,
-                         "fima_discharge_rel_std": 0.02288}
+                         "fima_discharge_rel_std": 0.02288, "base_seed": 7}
+    assert f"set seed {serpent_seed}\n" in (run / "synthetic_5.serpent").read_text()
+    seeds = {json.loads((run / f"synthetic_operating_{s}.json").read_text())["serpent_seed"] for s in range(1, 6)}
+    assert len(seeds) == 5  # a different Serpent seed every step
     golden("e2e/zone_map5.json", (run / "zone_map5.json").read_text())
     golden("e2e/synthetic_5.serpent", (run / "synthetic_5.serpent").read_text())
     golden("e2e/synthetic_discharge_inventory4.json", (run / "synthetic_discharge_inventory4.json").read_text())
@@ -136,3 +140,21 @@ def test_restart_loads_pickled_core(sim, tmp_path):
 def test_malformed_line_raises_deck_error(sim):
     with pytest.raises(DeckError, match="set_rod_depth"):
         sim.read_input_line("set_rod_depth deep\n")
+
+
+def test_step_rng_depends_only_on_seed_and_iteration(sim):
+    sim.read_input_line("set_seed 7")
+    first = sim.step_rng(12).integers(0, 1 << 30, size=4)
+    sim.step_rng(3).integers(0, 1 << 30, size=100)  # unrelated draws in between
+    assert (sim.step_rng(12).integers(0, 1 << 30, size=4) == first).all()
+    assert (sim.step_rng(13).integers(0, 1 << 30, size=4) != first).any()
+    assert (sim.step_rng(12, replica=1).integers(0, 1 << 30, size=4) != first).any()
+
+
+def test_serpent_seed_per_step_unless_set_explicitly(sim):
+    assert "seed" not in sim.serpent_settings_for_step(1)  # no set_seed: Serpent's own default
+    sim.read_input_line("set_seed 7")
+    assert sim.serpent_settings_for_step(1)["seed"] != sim.serpent_settings_for_step(2)["seed"]
+    assert sim.serpent_settings_for_step(1) == sim.serpent_settings_for_step(1)
+    sim.read_input_line("set seed 42")
+    assert sim.serpent_settings_for_step(1)["seed"] == sim.serpent_settings_for_step(2)["seed"] == "42"

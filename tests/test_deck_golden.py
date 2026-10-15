@@ -3,6 +3,7 @@
 Regenerate deliberately with ``pytest --update-golden`` and review the diff.
 """
 
+import numpy as np
 import pytest
 from helpers.synthetic import build_core
 
@@ -18,8 +19,10 @@ def render(case_dir, seed_all, cr_position=300.0):
             zone.initialize({"graphpeb": 0.5, "fuel20": 0.5})
             core.initialize_materials(zone.inventory)
     seed_all(11)
+    core.rng = np.random.default_rng(11)
     core.insert([("graphpeb", 0.5), ("reinsert", 1.0), ("fuel20", 1.0)], 18.63, 0.02288)
     seed_all(12)
+    core.rng = np.random.default_rng(12)
     name = core.generate_input(SETTINGS, 6.525, 0, cr_position=cr_position)
     with open(name) as f:
         deck = f.read()

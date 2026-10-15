@@ -53,8 +53,18 @@ Code removed from files that remain (recover with `git show v1-as-run:<file>`):
 - `PEARLSim.py`: the `ml_model_wrappers` import and `pebble_model.num_cores`.
 - Review items made moot: #27, #32, #33.
 
-Whole files (`pebble_model.py`, `depletion_utilities.py`, `pearlsim_chain.xml`,
-`pebble_gFHR_template.serpent`, notebooks) and untracked artifacts: see the change log.
+Whole files:
+
+| Removed | Tracked? | Recover from |
+|---|---|---|
+| `pearlsim/pebble_model.py`, `pearlsim/depletion_utilities.py`, `pearlsim/isotope_rename_key.py` | yes | `v1-as-run` |
+| `pearlsim_chain.xml` (OpenMC depletion chain), `pebble_gFHR_template.serpent` | yes | `v1-as-run` |
+| `create_current_model.ipynb`, `generate_current_dataset.ipynb` | yes | `v1-as-run` |
+| `pearlsim/ml_model_wrappers.py`, `gen_xs_openmc.py`, `train_burnup_models{,_2}.{py,sub}` | no | branch `v1`, or the cleanup archive |
+| `create_current_model-Copy1.ipynb`, `create_current_model_object.ipynb`, `create_burnup_model{,_backup,_object}.ipynb`, `create_xs_model.ipynb`, `generate_microxs_models.ipynb`, `generate_kernel_burnup_data{,_backup}.ipynb` | no | cleanup archive |
+| `ml_models/{current,flux}_rfr_{feature,target}_{mean,std}.csv` | no | branch `v1`, or the cleanup archive |
+| `depletion_results.h5`, `depletion_results_2.h5`, `u235endf7.ace`, `pebble_current_matrix/` | no | cleanup archive |
+| `burnup_models/` (4.3 GB), `pebble_xs_models/` (3.9 GB), `detector_data/` (0.6 GB), `ml_models/{current,flux}_{model,rfr}.pkl` (12.8 GB); moved without hashing | no | cleanup archive |
 
 ## 3. v1 one-step LSTM steering (superseded by the multi-step planner)
 
@@ -65,3 +75,4 @@ Keywords `steer`, `steer_constant_ascent`, `steer_updated` and helpers `get_reac
 - Gamma-spectrum measurement code removed (section 1).
 - Pebble-wise ML code paths removed from `core.py`, `simulation.py`, `ml_utilities.py`, `PEARLSim.py`
   (section 2).
+- Pebble-wise ML files deleted and untracked artifacts archived (section 2).

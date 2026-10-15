@@ -24,11 +24,6 @@ def _stub_module(name, **attributes):
     sys.modules[name] = module
 
 
-# v1 simulation.py and pebble_model.py import ml_model_wrappers, which was never
-# committed. The stub goes away when the pebble-wise ML code is removed
-# (refactor plan, Phase 0.5 commit 11).
-_stub_module("pearlsim.ml_model_wrappers", SingleModelWrapper=object, XSModelWrapper=object)
-
 
 def pytest_addoption(parser):
     parser.addoption("--update-golden", action="store_true", default=False,

@@ -108,7 +108,6 @@ def main():
     meshes = read_det_file(
         os.path.join(SRC, f"{RUN}_{STEP}.serpent_det1.m"),
         meshes_to_read=["subzone_3group_flux", "subzone_power"],
-        read_pebbles=False,
         mesh_grids_rze=[(RADIUS_GRID_8, HEIGHT_GRID_20, ENERGY_GRID_3), (RADIUS_GRID_8, HEIGHT_GRID_20, [0.0])],
     )
     features = extract_lstm_input_features(SRC, STEP, run_name=RUN, merge=True)

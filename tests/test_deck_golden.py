@@ -18,9 +18,9 @@ def render(case_dir, seed_all, cr_position=300.0):
             zone.initialize({"graphpeb": 0.5, "fuel20": 0.5})
             core.initialize_materials(zone.inventory)
     seed_all(11)
-    core.insert([("graphpeb", 0.5), ("reinsert", 1.0), ("fuel20", 1.0)], 18.63, 0.02288, None)
+    core.insert([("graphpeb", 0.5), ("reinsert", 1.0), ("fuel20", 1.0)], 18.63, 0.02288)
     seed_all(12)
-    name = core.generate_input(SETTINGS, 0, 6.525, 0, cr_position=cr_position)
+    name = core.generate_input(SETTINGS, 6.525, 0, cr_position=cr_position)
     with open(name) as f:
         deck = f.read()
     with open(f"pebble_positions_{core.iteration}.csv") as f:

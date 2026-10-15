@@ -193,7 +193,6 @@ def collect_results_from_step(directory, step, run_name="gFHR_equilibrium", keff
     out_meshes = read_det_file(det_file, 
                            meshes_to_read=["subzone_3group_flux",
                                            "subzone_power"], 
-                           read_pebbles=False, 
                            mesh_grids_rze = [(RADIUS_GRID_8, HEIGHT_GRID_20, ENERGY_GRID_3),
                                              (RADIUS_GRID_8, HEIGHT_GRID_20, [0.0])])
     # Extract the meshes used for PEARLSim hyperfidelity
@@ -201,7 +200,6 @@ def collect_results_from_step(directory, step, run_name="gFHR_equilibrium", keff
         det_file = f"{directory}/{run_name}_{step}.serpent_det0.m"
         coarse_mesh = read_det_file(det_file, 
                                meshes_to_read=["coarse_7group_flux"], 
-                               read_pebbles=False, 
                                mesh_grids_rze = [(RADIUS_GRID_3, HEIGHT_GRID_8, ENERGY_GRID_7)])
         simulation_data["coarse_7group_flux"] = coarse_mesh["coarse_7group_flux"]
     output_table.update(flatten_mesh(out_meshes["subzone_3group_flux"]["data"]))

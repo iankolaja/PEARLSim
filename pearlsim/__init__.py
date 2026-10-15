@@ -37,7 +37,6 @@ from .material import Material
 # name -> (module, attribute) for lazily imported objects
 _LAZY = {
     "Simulation": (".simulation", "Simulation"),
-    "Pebble_Model": (".pebble_model", "Pebble_Model"),
     "standardize": (".ml_utilities", "standardize"),
     "unstandardize": (".ml_utilities", "unstandardize"),
     "extract_from_bumat": (".ml_utilities", "extract_from_bumat"),
@@ -57,7 +56,7 @@ def __getattr__(name):
 
 
 __all__ = [
-    "Core", "Material", "Pebble_Model", "Simulation", "standardize", "unstandardize", "read_core_flux",
+    "Core", "Material", "Simulation", "standardize", "unstandardize", "read_core_flux",
     "read_res_file",
     "extract_from_bumat", "get_fima", "ENERGY_GRID_14", "ENERGY_CENTERS_14",
     "ENERGY_GRID_56", "ENERGY_CENTERS_56", "ENERGY_GRID_7", "ENERGY_CENTERS_7",

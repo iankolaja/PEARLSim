@@ -6,9 +6,7 @@ from pearlsim.core import Core
 from pearlsim.material import Material
 from pearlsim.ml_utilities import read_det_file, add_computed_features
 from pearlsim.results_processing import read_core_flux, extract_lstm_input_features
-from pearlsim.ml_model_wrappers import SingleModelWrapper, XSModelWrapper
 import numpy as np
-from pearlsim.pebble_model import Pebble_Model
 import pandas as pd
 import os
 import json
@@ -129,7 +127,6 @@ class Simulation():
         self.burnup_time_step = 6.525 # days
         self.fima_discharge_threshold = 17
         self.fima_discharge_rel_std = 0.02576
-        self.pebble_model = Pebble_Model()
         self.debug = 0
         self.serpent_settings = {"pop": "10000 50 25"}
 
@@ -169,7 +166,6 @@ class Simulation():
                 key = fresh_definitions[i * 2]
                 file_path = fresh_definitions[i * 2 + 1].replace("\n","")
                 self.core.fresh_pebbles[key] = Material(key, "../"+file_path)
-                self.pebble_model.fresh_materials[key] = Material(key, "../"+file_path)
 
         if keyword == "triso_file":
             num_copies = int(line[1])
@@ -384,7 +380,7 @@ class Simulation():
                                     
             
                 self.core.insert(insertion_ratios, self.fima_discharge_threshold,
-                    self.fima_discharge_rel_std, self.pebble_model, debug=self.debug)
+                    self.fima_discharge_rel_std, debug=self.debug)
 
                 
                 bumat_name = f"{self.simulation_name}_{self.core.iteration}.serpent.bumat{last_step}"
@@ -414,7 +410,6 @@ class Simulation():
                     self.core.iteration += 1
                 else:
                     input_name = self.core.generate_input(self.serpent_settings,
-                                                          0,
                                                           self.burnup_time_step,
                                                           self.debug,
                                                           cr_position=self.rod_insertion)
@@ -630,7 +625,7 @@ class Simulation():
                                     
             
                 self.core.insert(insertion_ratios, self.fima_discharge_threshold,
-                    self.fima_discharge_rel_std, self.pebble_model, debug=self.debug)
+                    self.fima_discharge_rel_std, debug=self.debug)
 
                 
                 bumat_name = f"{self.simulation_name}_{self.core.iteration}.serpent.bumat{last_step}"
@@ -660,7 +655,6 @@ class Simulation():
                     self.core.iteration += 1
                 else:
                     input_name = self.core.generate_input(self.serpent_settings,
-                                                          0,
                                                           self.burnup_time_step,
                                                           self.debug,
                                                           cr_position=self.rod_insertion)
@@ -898,7 +892,7 @@ class Simulation():
                                     
             
                 self.core.insert(insertion_ratios, self.fima_discharge_threshold,
-                    self.fima_discharge_rel_std, self.pebble_model, debug=self.debug)
+                    self.fima_discharge_rel_std, debug=self.debug)
 
                 
                 bumat_name = f"{self.simulation_name}_{self.core.iteration}.serpent.bumat{last_step}"
@@ -928,7 +922,6 @@ class Simulation():
                     self.core.iteration += 1
                 else:
                     input_name = self.core.generate_input(self.serpent_settings,
-                                                          0,
                                                           self.burnup_time_step,
                                                           self.debug,
                                                           cr_position=self.rod_insertion)
@@ -987,26 +980,8 @@ class Simulation():
             pebble_path = line[2].replace("\n", "")
             #try:
             self.core.define_zones("../"+file_path, "../"+pebble_path, debug=self.debug)
-            self.pebble_model.radial_bound_points = self.core.radial_bound_points
-            self.pebble_model.axial_zone_bounds = self.core.axial_zone_bounds
             #except:
             #    print(f"Failed to define zones from {file_path}. Is the file valid?")
-
-        if keyword == "load_pebble_model":
-            current_model_path = "../" + line[1]
-            flux_model_path = "../" + line[2]
-            xs_model_path = "../" + line[3].replace("\n","")
-            print(f"Loading current model from {current_model_path}")
-            self.pebble_model.load_current_model(current_model_path)
-            print(f"Loading burnup model from {flux_model_path}")
-            self.pebble_model.load_flux_model(flux_model_path)
-            print(f"Loading xs model from {xs_model_path}")
-            self.pebble_model.load_xs_model(xs_model_path)
-
-        if keyword == "load_velocity_profile":
-            file_path = line[1].replace("\n","")
-            print(f"Loading velocity profile from {file_path}")
-            self.pebble_model.load_velocity_model("../"+file_path)
 
         if keyword == "core_geometry":
             file_path = line[1].replace("\n", "").replace('\"','')
@@ -1030,8 +1005,6 @@ class Simulation():
                     zone.initialize(insertion_ratios, debug=self.debug)
                     self.core.initialize_materials(zone.inventory)
                     print(f"Initialized zone R{zone.radial_num}Z{zone.axial_num}")
-            self.pebble_model.initialize_pebbles(num_pebbles, self.core.pebble_locations,
-                                                insertion_ratios, debug=self.debug)
             print("Finished initializing zones.")
 
 
@@ -1043,7 +1016,7 @@ class Simulation():
             last_step = len(self.core.substep_schema)
             for step in range(num_steps):
                 self.core.insert(insertion_ratios, self.fima_discharge_threshold,
-                    self.fima_discharge_rel_std, self.pebble_model, debug=self.debug)
+                    self.fima_discharge_rel_std, debug=self.debug)
 
                 
                 bumat_name = f"{self.simulation_name}_{self.core.iteration}.serpent.bumat{last_step}"
@@ -1074,7 +1047,6 @@ class Simulation():
                     self.core.iteration += 1
                 else:
                     input_name = self.core.generate_input(self.serpent_settings,
-                                                          0,
                                                           self.burnup_time_step,
                                                           self.debug,
                                                           cr_position=self.rod_insertion)
@@ -1154,71 +1126,14 @@ class Simulation():
             self.load_from_step(load_iteration, burnup_step)
 
 
-        if keyword == "simulate_pebbles":
-            num_steps = int(line[1])
-            num_substeps = int(line[2])
-            starting_step = int(line[3])
-            fuel_ratios = line[4:]
-            num_definitions = int(len(fuel_ratios)/2)
-            insertion_ratios = {}
-            for i in range(num_definitions):
-                insertion_ratios[fuel_ratios[i*2]] = float(fuel_ratios[i*2+1])
-                
-            for i in range(starting_step, starting_step+num_steps+1):
-                print(f"Simulating pebbles (Step {i})")
-                self.pebble_model.update_model(i, self, self.burnup_time_step,
-                                               insertion_ratios, self.fima_discharge_threshold,
-                                               self.debug)
-
-        if keyword == "sample_pebbles_from_step":
-            load_iteration = int(line[1])
-            num_pebbles = int(line[2])
-            for r in range(len(self.core.zones)):
-                for zone in self.core.zones[r]:
-                    zone.initialize({"graphpeb":1}, debug=self.debug)
-            self.core.load_zone_maps(f"zone_map{load_iteration}.json")
-            self.core.load_pebble_locations(f"pebble_positions_{load_iteration}.csv", debug=self.debug)
-            self.core.update_from_bumat(self.debug, iteration=load_iteration, step=0)
-            
-            self.core.iteration = load_iteration
-            self.load_from_step(load_iteration, 0)
-            self.pebble_model.sample_pebbles(num_pebbles, self.core.pebble_locations, 
-                self.core.materials, debug=self.debug)
-            
-
-        if keyword == "generate_training_data":
-            step = int(line[1])
-            self.core.iteration = step
-            num_training_data = int(line[2])
-            repeat_flag = get_boolean(line[3])
-            
-            result_file = f"gFHR_equilibrium_training_{step}.serpent_det0.m"
-            if not repeat_flag and os.path.isfile(result_file):
-                print(f"{result_file} already found. Skipping...")
-            else:
-                self.load_from_step(step, 0)
-                print(f"Generating {num_training_data} points of training data from step {step}.")
-                input_name = self.core.generate_input(self.serpent_settings,
-                                                      num_training_data,
-                                                      self.burnup_time_step,
-                                                      self.debug,
-                                                      cr_position=self.rod_insertion)
-                self.run_serpent(input_name)
-        
-        
         if keyword == "save":
             core_file = f"{self.simulation_name}_core.pkl"
-            pebble_model_file = f"{self.simulation_name}_pebble_model.pkl"
             simulation_file = f"{self.simulation_name}_simulation.pkl"
             
             core_data = pickle.dumps(self.core)
             with open(core_file, 'wb') as f:
                 f.write(core_data)
                 
-            pebmod_data = pickle.dumps(self.pebble_model)
-            with open(pebble_model_file, 'wb') as f:
-                f.write(pebmod_data)
-            
             simulation_data = pickle.dumps(self)
             with open(simulation_file, 'wb') as f:
                 f.write(simulation_data)
@@ -1230,7 +1145,6 @@ class Simulation():
             last_step = len(self.core.substep_schema)
             if serpent_flag == 1:
                 input_name = self.core.generate_input(self.serpent_settings,
-                                                      0,
                                                       self.burnup_time_step,
                                                       self.debug,
                                                       cr_position=self.rod_insertion)
@@ -1258,7 +1172,6 @@ class Simulation():
                 self.core.update_from_bumat(self.debug, step=last_step)
                 self.days += self.burnup_time_step
                 input_name = self.core.generate_input(self.serpent_settings,
-                                                      0,
                                                       self.burnup_time_step,
                                                       self.debug,
                                                       cr_position=self.rod_insertion)

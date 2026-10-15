@@ -54,13 +54,13 @@ def test_num_z_has_one_entry_per_channel(core):
 def test_insert_conserves_zone_occupancy_over_several_steps(core):
     for step in range(1, 5):
         core.iteration = step
-        core.insert(INSERT, THRESHOLD, REL_STD, None)
+        core.insert(INSERT, THRESHOLD, REL_STD)
         assert zone_totals(core) == [[18, 18, 18], [18, 18, 18]]
         assert count(core, lambda k: True) == 108
 
 
 def test_insert_writes_discharge_and_discard_records(core, tmp_path):
-    core.insert(INSERT, THRESHOLD, REL_STD, None)
+    core.insert(INSERT, THRESHOLD, REL_STD)
     discharge = json.loads((tmp_path / "synthetic_discharge_inventory1.json").read_text())
     discard = json.loads((tmp_path / "synthetic_discard_inventory1.json").read_text())
     assert sorted(discharge) == ["discharge_fuel20_R1Z3G1", "discharge_fuel20_R2Z3G1",
@@ -72,21 +72,21 @@ def test_insert_writes_discharge_and_discard_records(core, tmp_path):
 
 
 def test_fuel_moves_up_one_zone_per_insert(core):
-    core.insert(INSERT, THRESHOLD, REL_STD, None)
+    core.insert(INSERT, THRESHOLD, REL_STD)
     assert core.zones[0][1].inventory == {"graphpeb_R1Z2G1": 9, "fuel20_R1Z2G1": 9}
     # a discharge is reinserted on the *next* insert, so step 1 fills the bottom with fresh fuel
     assert core.zones[0][0].inventory == {"graphpeb_R1Z1G1": 9, "fuel20_R1Z1G1": 9}
     core.iteration = 2
-    core.insert(INSERT, THRESHOLD, REL_STD, None)
+    core.insert(INSERT, THRESHOLD, REL_STD)
     # step 2: the pass-averaged step-1 discharge comes back as group 2
     assert core.zones[0][0].inventory == {"graphpeb_R1Z1G1": 9, "fuel20_R1Z1G2": 9}
 
 
 def _reinserted_after_graphite_increase(core):
     core.iteration = 1
-    core.insert(INSERT, THRESHOLD, REL_STD, None)  # discharges 18 fresh fuel pebbles, none discarded
+    core.insert(INSERT, THRESHOLD, REL_STD)  # discharges 18 fresh fuel pebbles, none discarded
     core.iteration = 2
-    core.insert([("graphpeb", 0.8), ("reinsert", 1.0), ("fuel20", 1.0)], THRESHOLD, REL_STD, None)
+    core.insert([("graphpeb", 0.8), ("reinsert", 1.0), ("fuel20", 1.0)], THRESHOLD, REL_STD)
     return sum(core.zones[r][0].inventory.get(f"fuel20_R{r + 1}Z1G2", 0) for r in range(core.num_r))
 
 

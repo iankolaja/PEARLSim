@@ -33,7 +33,28 @@ paper. That paper has its own published repository of key notebooks.
 
 ML models of per-pebble current, flux and cross sections (random forests), with OpenMC MicroXS
 pebble depletion, as a fast stand-in for explicit pebble-wise depletion. Training data came from
-Serpent runs with sample-pebble detectors and `set mdep`. *(Removal pending: see change log.)*
+Serpent runs with sample-pebble detectors and `set mdep`.
+
+Code removed from files that remain (recover with `git show v1-as-run:<file>`):
+- `pearlsim/core.py`: `Core.generate_sample_pebbles` (sample-pebble detectors and `set mdep` blocks);
+  the `num_training_data` parameter and training branch of `Core.generate_input`; the unused
+  `pebble_model` parameter of `Core.insert`.
+- `pearlsim/simulation.py`: `Simulation.pebble_model`; keywords `load_pebble_model`,
+  `load_velocity_profile`, `simulate_pebbles`, `sample_pebbles_from_step`, `generate_training_data`;
+  the pebble-model pickle written by `save`. **Behaviour note:** `initialize` no longer calls
+  `Pebble_Model.initialize_pebbles`, which drew from `np.random`. A deck that does not reseed after
+  `initialize` therefore produces different pebble shuffles than v1.
+- `pearlsim/ml_utilities.py`: the pebble branches of `read_det_file` (`read_pebbles`,
+  `pebble_energy_grid`); `extract_xs_from_mdx`, `match_flux_to_xs_and_flatten`,
+  `expand_pebble_features_by_energy`, `flatten_pebble_data`, `generate_pebble_burnup_model`,
+  `interpolate_core_flux_3d`, `interpolate_core_power`, `extract_ml_samples_from_training_step`,
+  `log_scale_data`, `create_forecast_dataset`, `create_training_split`; constants
+  `PEBBLE_SURFACE_AREA`, `PEBBLE_KERNEL_VOLUME`.
+- `PEARLSim.py`: the `ml_model_wrappers` import and `pebble_model.num_cores`.
+- Review items made moot: #27, #32, #33.
+
+Whole files (`pebble_model.py`, `depletion_utilities.py`, `pearlsim_chain.xml`,
+`pebble_gFHR_template.serpent`, notebooks) and untracked artifacts: see the change log.
 
 ## 3. v1 one-step LSTM steering (superseded by the multi-step planner)
 
@@ -42,3 +63,5 @@ Keywords `steer`, `steer_constant_ascent`, `steer_updated` and helpers `get_reac
 
 ## Change log
 - Gamma-spectrum measurement code removed (section 1).
+- Pebble-wise ML code paths removed from `core.py`, `simulation.py`, `ml_utilities.py`, `PEARLSim.py`
+  (section 2).

@@ -109,6 +109,22 @@ def _material_spread(values, mean):
     return summary
 
 
+def mean_over_replicas(values, relative_unc):
+    """Mean over replicas (axis 0), the relative uncertainty of the mean, and the replica sample std.
+
+    relative_unc are Serpent's relative 1-sigma uncertainties of each replica.
+    Works elementwise on arrays (meshes) as well as on scalars (k_eff).
+    """
+    values, relative_unc = np.asarray(values, dtype=float), np.asarray(relative_unc, dtype=float)
+    n = len(values)
+    mean = values.mean(axis=0)
+    absolute = np.sqrt(((values * relative_unc) ** 2).sum(axis=0)) / n
+    with np.errstate(divide="ignore", invalid="ignore"):
+        unc = np.where(mean != 0, absolute / np.abs(mean), 0.0)
+    std = values.std(axis=0, ddof=1) if n > 1 else np.zeros_like(mean)
+    return mean, unc, std
+
+
 def write_spread(file_name, spread):
     with open(file_name, "w") as f:
         json.dump(spread, f)

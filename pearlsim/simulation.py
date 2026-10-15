@@ -17,7 +17,7 @@ import subprocess
 import numpy as np
 import pandas as pd
 
-from pearlsim import replicas
+from pearlsim import records, replicas
 from pearlsim.core import Core
 from pearlsim.material import Material
 from pearlsim.nuclear_data import ENDF7_V1, PROFILES
@@ -53,6 +53,8 @@ class Simulation:
         self.thermal_coupling = False
         self.replicas = 1  # independent Serpent runs per step, averaged (set_replicas)
         self.replica_mode = "concurrent"
+        self.dataset_version = None  # recorded in every step record (set_dataset_version)
+        self._provenance = None
 
     # ------------------------------------------------------------------ deck parsing
 
@@ -218,6 +220,9 @@ class Simulation:
     def _kw_set_thermal_coupling(self, args):
         self.thermal_coupling = get_boolean(args[0])
 
+    def _kw_set_dataset_version(self, args):
+        self.dataset_version = args[0]
+
     def _kw_set_replicas(self, args):
         """set_replicas <n> [concurrent|sequential]: n reshuffled Serpent runs per step, averaged."""
         num = int(args[0])
@@ -365,6 +370,15 @@ class Simulation:
             replicas.write_spread(f"{self.simulation_name}_replica_spread_{iteration}.json", spread)
         self.days += self.burnup_time_step
         self.core.iteration += 1
+        records.write_record(".", self.simulation_name, iteration, num_replicas=self.replicas, days=self.days,
+                             provenance=self.provenance(settings[ids[0]]))
+
+    def provenance(self, settings):
+        """Run provenance for step records (code version is looked up once per simulation)."""
+        if self._provenance is None:
+            self._provenance = records.run_provenance(self.serpent_command, settings, self.dataset_version)
+        return {**self._provenance, "dataset_version": self.dataset_version,
+                "serpent_settings": {k: v for k, v in settings.items() if k != "seed"}}
 
     def load_from_step(self, load_iteration, burnup_step, debug=0):
         for channel in self.core.zones:

@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 from .ml_utilities import *
 from pearlsim.group_definitions import *
 from pearlsim.material import Material
+from pearlsim.replicas import mean_over_replicas
 import os
 import time
 import gzip
@@ -186,20 +187,6 @@ def _read_step_outputs(stem, keff_index, include_simulation_data):
     return keff_values[keff_index], keff_unc_values[keff_index], out_meshes, coarse_mesh
 
 
-def _mean_of_replicas(values, relative_unc):
-    """Mean over replicas, the relative uncertainty of the mean, and the replica sample std.
-
-    Works elementwise on arrays (meshes) as well as on scalars (k_eff).
-    """
-    values, relative_unc = np.asarray(values, dtype=float), np.asarray(relative_unc, dtype=float)
-    n = len(values)
-    mean = values.mean(axis=0)
-    absolute = np.sqrt(((values * relative_unc) ** 2).sum(axis=0)) / n
-    with np.errstate(divide="ignore", invalid="ignore"):
-        unc = np.where(mean != 0, absolute / np.abs(mean), 0.0)
-    return mean, unc, values.std(axis=0, ddof=1)
-
-
 def collect_results_from_step(directory, step, run_name="gFHR_equilibrium", keff_index = -1, meshes = [],
                               include_simulation_data=True, num_replicas=1):
     """Serpent results and model inputs of one step.
@@ -221,7 +208,7 @@ def collect_results_from_step(directory, step, run_name="gFHR_equilibrium", keff
     else:
         runs = [_read_step_outputs(f"{directory}/{run_name}_{step}_r{r}.serpent", keff_index, include_simulation_data)
                 for r in range(num_replicas)]
-        keff, keff_unc, keff_std = _mean_of_replicas([run[0] for run in runs], [run[1] for run in runs])
+        keff, keff_unc, keff_std = mean_over_replicas([run[0] for run in runs], [run[1] for run in runs])
         output_table["final_analog_keff"] = float(keff)
         output_table["final_analog_keff_unc"] = float(keff_unc)
         for r, run in enumerate(runs):
@@ -229,12 +216,12 @@ def collect_results_from_step(directory, step, run_name="gFHR_equilibrium", keff
         output_table["keff_rep_std"] = float(keff_std)
         out_meshes = runs[0][2]
         for name, mesh in out_meshes.items():
-            mesh["data"], mesh["unc"], mesh["replica_std"] = _mean_of_replicas(
+            mesh["data"], mesh["unc"], mesh["replica_std"] = mean_over_replicas(
                 [run[2][name]["data"] for run in runs], [run[2][name]["unc"] for run in runs])
         coarse_mesh = runs[0][3]
         if coarse_mesh is not None:
             for name, mesh in coarse_mesh.items():
-                mesh["data"], mesh["unc"], mesh["replica_std"] = _mean_of_replicas(
+                mesh["data"], mesh["unc"], mesh["replica_std"] = mean_over_replicas(
                     [run[3][name]["data"] for run in runs], [run[3][name]["unc"] for run in runs])
     # Extract the meshes used for PEARLSim hyperfidelity
     if include_simulation_data:

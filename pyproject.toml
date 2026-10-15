@@ -22,7 +22,8 @@ dependencies = [
 
 [project.optional-dependencies]
 ml = ["torch"]
-data = ["pyarrow", "pyyaml"]
+# pyarrow 17 works with the pinned numpy 1.24; pyarrow 26 needs numpy >= 2
+data = ["pyarrow==17.0.0", "pyyaml"]
 dev = ["pytest", "ruff"]
 
 [project.urls]

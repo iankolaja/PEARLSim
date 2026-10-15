@@ -43,8 +43,6 @@ _LAZY = {
     "extract_from_bumat": (".ml_utilities", "extract_from_bumat"),
     "read_core_flux": (".results_processing", "read_core_flux"),
     "read_res_file": (".results_processing", "read_res_file"),
-    "create_spectra_with_serpent": (".serpent_spectrum_tools", "create_spectra_with_serpent"),
-    "read_gspec": (".serpent_spectrum_tools", "read_gspec"),
     "LSTM_predictor": (".lstm", "LSTM_predictor"),
 }
 
@@ -60,7 +58,7 @@ def __getattr__(name):
 
 __all__ = [
     "Core", "Material", "Pebble_Model", "Simulation", "standardize", "unstandardize", "read_core_flux",
-    "read_res_file", "create_spectra_with_serpent", "read_gspec",
+    "read_res_file",
     "extract_from_bumat", "get_fima", "ENERGY_GRID_14", "ENERGY_CENTERS_14",
     "ENERGY_GRID_56", "ENERGY_CENTERS_56", "ENERGY_GRID_7", "ENERGY_CENTERS_7",
     "RADIUS_GRID_4", "HEIGHT_GRID_10", "RADIUS_GRID_8", "HEIGHT_GRID_20",

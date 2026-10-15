@@ -5,7 +5,6 @@ import matplotlib.pyplot as plt
 from .ml_utilities import *
 from pearlsim.group_definitions import *
 from pearlsim.material import Material
-from pearlsim.serpent_spectrum_tools import *
 import os
 import time
 import gzip

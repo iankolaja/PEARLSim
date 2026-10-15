@@ -1,7 +1,6 @@
 from pearlsim.results_processing import *
 from pearlsim.ml_utilities import extract_from_bumat
 from pearlsim.material import Material
-from pearlsim.serpent_spectrum_tools import *
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd

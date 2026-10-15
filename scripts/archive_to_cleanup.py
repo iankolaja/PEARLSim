@@ -1,13 +1,15 @@
 """Move untracked files out of the repository into the cleanup archive, with a manifest.
 
-    python scripts/archive_to_cleanup.py PATH [PATH ...]
+    python scripts/archive_to_cleanup.py [--no-hash] PATH [PATH ...]
 
 Each PATH (file or directory, relative to the repository root) is moved to the
 same relative path under ``$PEARLSIM_CLEANUP`` (default
 ``/global/scratch/users/ikolaja/cleanup/PEARLSim_v1``). Before moving, one row
 per file is appended to ``MANIFEST.tsv`` there: path, size, sha256 (files up to
 1 GB; larger files record ``skipped``), mtime, and the archive date. After
-moving, the hashes are verified. Tracked files are refused: they are
+moving, the hashes are verified. ``--no-hash`` records size and mtime only, for
+large data directories: the move is a same-filesystem rename, which cannot
+change file contents. Tracked files are refused: they are
 recoverable from git (tag ``v1-as-run``) and are removed with ``git rm``.
 See docs/REMOVED.md.
 """
@@ -23,8 +25,8 @@ DEST = os.environ.get("PEARLSIM_CLEANUP", "/global/scratch/users/ikolaja/cleanup
 HASH_LIMIT = 1 << 30
 
 
-def sha256(path):
-    if os.path.getsize(path) > HASH_LIMIT:
+def sha256(path, enabled=True):
+    if not enabled or os.path.getsize(path) > HASH_LIMIT:
         return "skipped"
     h = hashlib.sha256()
     with open(path, "rb") as f:
@@ -48,7 +50,7 @@ def is_tracked(rel):
     return result.returncode == 0
 
 
-def main(paths):
+def main(paths, hashing=True):
     os.makedirs(DEST, exist_ok=True)
     if os.stat(REPO).st_dev != os.stat(DEST).st_dev:
         print("warning: archive is on a different filesystem; mv will copy data", file=sys.stderr)
@@ -70,7 +72,7 @@ def main(paths):
             for f in files_under(src):
                 st = os.stat(f)
                 mtime = datetime.datetime.fromtimestamp(st.st_mtime).isoformat(timespec="seconds")
-                rows.append((os.path.relpath(f, REPO), st.st_size, sha256(f), mtime))
+                rows.append((os.path.relpath(f, REPO), st.st_size, sha256(f, hashing), mtime))
             dst = os.path.join(DEST, rel)
             if os.path.exists(dst):
                 sys.exit(f"destination exists, not overwriting: {dst}")
@@ -85,4 +87,6 @@ def main(paths):
 
 
 if __name__ == "__main__":
-    main(sys.argv[1:])
+    args = sys.argv[1:]
+    no_hash = "--no-hash" in args
+    main([a for a in args if a != "--no-hash"], hashing=not no_hash)

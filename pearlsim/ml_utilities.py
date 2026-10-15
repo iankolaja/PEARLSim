@@ -8,6 +8,14 @@ from pearlsim.group_definitions import *
 
 def read_det_file(file_name, meshes_to_read=["coarse_7group_flux"],
                   mesh_grids_rze = [(RADIUS_GRID_3, HEIGHT_GRID_8, ENERGY_GRID_7)]):
+    """Read cylindrical r-z mesh detectors from a Serpent _det.m file as CELL AVERAGES.
+
+    Serpent writes each mesh cell's result integrated over the cell (a power mesh
+    with ``dr -8 void`` under ``set power`` is in W per cell). This reader divides
+    every value by the cell's geometric volume pi (r2^2 - r1^2) dz, so it returns
+    power in W/cm3 and flux in n/cm2/s. ``unc`` is Serpent's relative uncertainty,
+    unchanged. pearlsim.records.power_summary multiplies the volumes back for W.
+    """
     reading=False
     skip_names = ["E", "PHI", "Z", "R"]
 
@@ -70,6 +78,7 @@ def read_det_file(file_name, meshes_to_read=["coarse_7group_flux"],
                 bin_z = int(line[7])-1
                 data = float(line[10])
                 unc = float(line[11])
+                # integrated -> cell average (see docstring)
                 volume = np.pi*(radius_grid[bin_r+1]**2-radius_grid[bin_r]**2)*(height_grid[bin_z+1]-height_grid[bin_z])
                 if len(energy_grid) > 1:
                     energy_width = energy_grid[bin_e+1]-energy_grid[bin_e]

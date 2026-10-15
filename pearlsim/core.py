@@ -5,7 +5,7 @@ from copy import deepcopy
 import pandas as pd
 import os
 import json
-from .get_fima import get_fima
+from .get_fima import get_fima, heavy_metal_density
 import gzip
 
 BINNING_ATTEMPTS = 20
@@ -56,7 +56,8 @@ class Core():
         self.num_top_zone_pebbles = 0
         self.substep_schema = [1.0]
         self.averaging_mode = "pass"
-        self.initial_actinides = 0.00466953 + 0.0189728  # u235 x u238
+        # heavy-metal atom density of fresh fuel; set from the fresh fuel material (set_fresh_fuel)
+        self.initial_actinides = 0.00466953 + 0.0189728  # fuel20 U-235 + U-238
         self.materials = {}
         self.fresh_pebbles = {}
         self.pebble_locations = pd.DataFrame([], columns=["x", "y", "z", "r", "zone_r", "zone_z", "material"])
@@ -101,7 +102,6 @@ class Core():
                 self.zones[r] += [Zone(1, r + 1, z + 1)]
         self.load_pebble_locations(pebble_file, debug)
         for r in range(self.num_r):
-            self.num_z += [len(self.axial_zone_bounds[r]) + 1]
             self.num_top_zone_pebbles += len(self.zones[r][-1].pebble_locations)
 
     def load_pebble_locations(self, pebble_file, debug):
@@ -349,6 +349,12 @@ class Core():
         # Reassign the inventories as just the new averaged material
         out_of_core_bin.inventory = averaged_materials
 
+    def set_fresh_material(self, key, material):
+        """Register a fresh pebble material; fuel sets the initial heavy-metal density used for FIMA."""
+        self.fresh_pebbles[key] = material
+        if heavy_metal_density(material.concentrations) > 0:
+            self.initial_actinides = heavy_metal_density(material.concentrations)
+
     def initialize_materials(self, zone_inventory):
         for key in zone_inventory.keys():
             fuel_type = key.split("_")[0]
@@ -462,7 +468,7 @@ class Core():
                 data_dict = json.loads(fin.read())
         else:
             with open(file_name, 'r') as f:
-                data_dict = json.loads(f)
+                data_dict = json.load(f)
         for mat_name in data_dict.keys():
             mat_conc = data_dict[mat_name]
             if mat_name in self.materials.keys():

@@ -153,7 +153,9 @@ def extract_lstm_input_features(directory, step, run_name="gFHR_equilibrium", me
     for i in range(len(fima_bin_counts)):
         fima_averages[f"burnup_bin{i+1}_count"] = fima_bin_counts[i] 
     
-    fima_averages["avg_FIMA"] = total_weighted_fima_sum / total_discharge_pebbles
+    # no fuel discharged (e.g. all-graphite startup): report 0, as v1 gathering filled it
+    fima_averages["avg_FIMA"] = (total_weighted_fima_sum / total_discharge_pebbles
+                                 if total_discharge_pebbles else 0.0)
     fima_average_series = pd.Series(fima_averages)
     
     

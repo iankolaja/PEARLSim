@@ -89,7 +89,7 @@ class Simulation:
 
     def _kw_fresh(self, args):
         for key, path in _pairs(args):
-            self.core.fresh_pebbles[key] = Material(key, "../" + path)
+            self.core.set_fresh_material(key, Material(key, "../" + path))
 
     def _kw_triso_file(self, args):
         num_copies, path = int(args[0]), args[1]

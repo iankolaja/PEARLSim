@@ -46,8 +46,8 @@ def test_synthetic_core_layout(core):
     assert len(core.pebble_locations) == 108
 
 
-@pytest.mark.xfail(strict=True, reason="review #23: define_zones appends num_z twice")
 def test_num_z_has_one_entry_per_channel(core):
+    """Review #23 (fixed)."""
     assert len(core.num_z) == core.num_r
 
 
@@ -158,7 +158,18 @@ def test_material_json_gz_round_trip(core, tmp_path):
     assert {k: m.concentrations for k, m in core.materials.items()} == original
 
 
-@pytest.mark.xfail(strict=True, reason="review #34: non-gzip branch calls json.loads on a file object")
 def test_material_json_round_trip(core):
+    """Review #34 (fixed)."""
     core.save_all_materials("materials.json")
+    original = {k: dict(m.concentrations) for k, m in core.materials.items()}
     core.load_all_materials("materials.json")
+    assert {k: m.concentrations for k, m in core.materials.items()} == original
+
+
+def test_initial_heavy_metal_comes_from_fresh_fuel(core):
+    fuel = core.fresh_pebbles["fuel20"]
+    half = Material("fuel_half", {k: v / 2 for k, v in fuel.concentrations.items()})
+    core.set_fresh_material("fuel_half", half)
+    assert core.initial_actinides == pytest.approx((0.00466953 + 0.0189728) / 2)
+    core.set_fresh_material("graphpeb", Material("graphpeb", {"6000<lib>": 1.0}))  # no heavy metal: unchanged
+    assert core.initial_actinides == pytest.approx((0.00466953 + 0.0189728) / 2)

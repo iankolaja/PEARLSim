@@ -85,11 +85,13 @@ def test_update_from_bumat_strips_particle_suffix(equilibrium_dir, expected, tmp
     assert "20060" in material.concentrations  # decay-only nuclides keep their ZAI
 
 
-@pytest.mark.xfail(strict=True, reason="review #35: all-graphite discharge raises ZeroDivisionError")
 def test_extract_lstm_input_features_with_graphite_only_discharge(equilibrium_dir, tmp_path):
+    """Review #35 (fixed): no fuel discharged gives avg_FIMA = 0 (as v1 gathering filled it)."""
     shutil.copyfile(os.path.join(equilibrium_dir, f"{RUN}_operating_{STEP}.json"),
                     tmp_path / f"{RUN}_operating_{STEP}.json")
     (tmp_path / f"{RUN}_discharge_inventory{STEP}.json").write_text(json.dumps(
         {"discharge_graphpeb_R1Z10G1": {"count": 500, "FIMA": 100.0, "FIMA_last_pass": 0.0}}))
     (tmp_path / f"{RUN}_discard_inventory{STEP}.json").write_text("{}")
-    extract_lstm_input_features(str(tmp_path), STEP, run_name=RUN, merge=True)
+    features = extract_lstm_input_features(str(tmp_path), STEP, run_name=RUN, merge=True)
+    assert features["avg_FIMA"] == 0.0
+    assert features["num_discarded"] == 0

@@ -4,6 +4,9 @@ from copy import deepcopy
 TRANSPORT_NUCLIDES = []
 
 def get_cross_section_string(temperature):
+    """Library suffix of the processed temperature at or below ``temperature`` (300-1800 K, 300 K steps)."""
+    if temperature < 300:
+        raise ValueError(f"no cross-section library at or below {temperature} K (lowest is 300 K)")
     xs_str = "."
     if 300 <= temperature < 600:
         xs_str += "03"
@@ -65,7 +68,7 @@ class Material():
         self.fima = 0.0
         self.fima_last_pass = 0.0
         self.temperature = temperature
-        self.cross_section_str = get_cross_section_string(temperature)
+        self.cross_section_str = None  # set from the temperature when the material is written
         if density is not None:
             self.density = density
 

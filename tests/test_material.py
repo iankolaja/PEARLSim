@@ -2,7 +2,7 @@
 
 import pytest
 
-from pearlsim.get_fima import get_fima
+from pearlsim.get_fima import atomic_number, get_fima, heavy_metal_density
 from pearlsim.material import Material, get_cross_section_string
 
 pytestmark = pytest.mark.characterization
@@ -18,9 +18,10 @@ def test_cross_section_suffix_uses_library_at_or_below_temperature(temperature, 
     assert get_cross_section_string(temperature) == expected
 
 
-@pytest.mark.xfail(strict=True, reason="review #26: returns the invalid suffix '.c' below 300 K")
-def test_cross_section_suffix_below_300K_is_valid():
-    assert get_cross_section_string(250) != ".c"
+def test_cross_section_suffix_below_300K_raises():
+    """Review #26 (fixed): no library exists below 300 K."""
+    with pytest.raises(ValueError, match="300 K"):
+        get_cross_section_string(250)
 
 
 def test_fresh_fuel_file_is_burnable_with_sum_fix_density(repo_root):
@@ -67,7 +68,18 @@ def test_fima_counts_heavy_metal_loss():
     assert get_fima(burned, FUEL20_INITIAL_ACTINIDES) == pytest.approx(expected)
 
 
-@pytest.mark.xfail(strict=True, reason="review #25: two-character ZAI prefix counts F-19 ('90..') as an actinide")
 def test_fima_ignores_fluorine():
+    """Review #25 (fixed): atomic number is parsed from the ZA/ZAI key."""
     conc = {"92235<lib>": 0.00466953, "92238<lib>": 0.0189728, "9019<lib>": 0.01}
     assert get_fima(conc, FUEL20_INITIAL_ACTINIDES) == pytest.approx(0.0)
+
+
+@pytest.mark.parametrize("key, z", [("92235<lib>", 92), ("6000<lib>", 6), ("9019<lib>", 9), ("1001<lib>", 1),
+                                    ("922350", 92), ("952421", 95), ("20060", 2), ("541350", 54)])
+def test_atomic_number_from_za_and_zai_keys(key, z):
+    assert atomic_number(key) == z
+
+
+def test_heavy_metal_density_of_fresh_fuel(repo_root):
+    fuel = Material("fuel20", f"{repo_root}/materials/fuel20.dat")
+    assert heavy_metal_density(fuel.concentrations) == FUEL20_INITIAL_ACTINIDES

@@ -32,7 +32,7 @@ RULES = [
     ("deck", r"\.serpent$", "drop"),
     ("serpent output listing", r"\.serpent\.out$", "drop"),
     ("depletion output", r"\.serpent_dep\.m$", "drop"),
-    ("binary restart", r"\.serpent\.dep$", "drop"),
+    ("binary depletion file", r"\.serpent\.dep$", "drop"),  # for sss2 -rdep; not a restart file
     ("seed", r"\.serpent\.seed$", "drop"),
     ("replica log", r"\.serpent\.log$", "drop"),
     ("geometry plot", r"\.serpent_geom\d+\.png$", "drop"),

@@ -194,8 +194,9 @@ def test_failed_replica_fails_step_and_rerun_resumes(tmp_path, fake_serpent_comm
     # the requeued job replays the deck: step 1 is reused, step 2 reruns only replica 1
     monkeypatch.delenv("FAKE_SERPENT_FAIL_DECKS")
     resumed, _ = run(tmp_path, fake_serpent_command, monkeypatch, 3, 2, serpent_flag=2, log="resume.jsonl")
-    assert [e["argv"][0] for e in read_log(tmp_path, "resume.jsonl")] == [
-        "synthetic_2_r1.serpent", "synthetic_3_r0.serpent", "synthetic_3_r1.serpent"]
+    resumed_decks = [e["argv"][0] for e in read_log(tmp_path, "resume.jsonl")]
+    assert resumed_decks[0] == "synthetic_2_r1.serpent"  # concurrent step-3 replicas finish in either order
+    assert sorted(resumed_decks[1:]) == ["synthetic_3_r0.serpent", "synthetic_3_r1.serpent"]
     for name in ("synthetic_2_r1.serpent", "synthetic_3_r0.serpent", "zone_map3.json", "pebble_positions_3_r1.csv"):
         assert (run_dir / name).read_text() == (ref_dir / name).read_text(), name
     for name, material in reference.core.materials.items():

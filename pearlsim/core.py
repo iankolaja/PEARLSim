@@ -390,7 +390,7 @@ class Core():
                 if len(pebbles_in_group) > 0:
                     for index in pebbles_in_group:
                         key = material_keys[index]
-                        if fuel_type in key:
+                        if _get_fuel_type(key) == fuel_type:  # exact: 'fuel1' must not match 'fuel15'
                             grouped_materials[key] = out_of_core_bin.inventory[key]
                             total_group_pebbles += out_of_core_bin.inventory[key]
 
@@ -425,10 +425,11 @@ class Core():
 
                 # Iterate through all bin pebbles to see if they're that pebble type
                 for key in out_of_core_bin.inventory.keys():
-                    _, pass_num = key.split("G")
+                    pass_num = key.rsplit("G", 1)[1]
 
                     # If so, add them to the grouped materials dictionary and count them
-                    if int(pass_num) == p and fuel_type in key:
+                    # (exact fuel type: 'fuel1' must not match 'fuel15')
+                    if int(pass_num) == p and _get_fuel_type(key) == fuel_type:
                         grouped_materials[key] = out_of_core_bin.inventory[key]
                         total_group_pebbles += out_of_core_bin.inventory[key]
 

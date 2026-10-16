@@ -243,3 +243,89 @@ def test_initial_heavy_metal_comes_from_fresh_fuel(core):
     assert core.initial_actinides == pytest.approx((0.00466953 + 0.0189728) / 2)
     core.set_fresh_material("graphpeb", Material("graphpeb", {"6000<lib>": 1.0}))  # no heavy metal: unchanged
     assert core.initial_actinides == pytest.approx((0.00466953 + 0.0189728) / 2)
+
+
+# ---- pass mode (averaging_mode "pass": discard after max_passes, average discharge per pass) ----
+
+PASS_INSERT = [("reinsert", 1.0), ("fuel20", 1.0)]
+
+
+def _burn_in_core(core, factor=0.98):
+    """Stand-in for a depletion step: scale heavy metal in every in-core fuel material."""
+    for channel in core.zones:
+        for zone in channel:
+            for key in zone.inventory:
+                if key.startswith("fuel"):
+                    conc = core.materials[key].concentrations
+                    for nuc in ("92235<lib>", "92238<lib>"):
+                        conc[nuc] *= factor
+
+
+def test_pass_mode_discards_after_max_passes_and_conserves_pebbles(core, tmp_path):
+    core.averaging_mode, core.max_passes = "pass", 3
+    for channel in core.zones:  # all-fuel core
+        for zone in channel:
+            zone.inventory = {k.replace("graphpeb", "fuel20"): 0 for k in zone.inventory}
+            zone.initialize({"fuel20": 1.0})
+            core.initialize_materials(zone.inventory)
+    discarded = []
+    for step in range(1, 31):
+        core.iteration = step
+        core.insert(PASS_INSERT, THRESHOLD, REL_STD)
+        _burn_in_core(core)
+        groups = {int(k.rsplit("G", 1)[1]) for ch in core.zones for z in ch for k in z.inventory}
+        assert groups <= {1, 2, 3}
+        assert count(core, lambda k: True) == 108
+        discard = json.loads((tmp_path / f"synthetic_discard_inventory{step}.json").read_text())
+        assert all(k.endswith("G3") for k in discard)  # only pebbles finishing their 3rd pass
+        discarded.append(sum(v["count"] for v in discard.values()))
+        fresh = count(core, lambda k: k.endswith("G1") and "Z1G" in k)
+        if step >= 3:  # a discharge returns one step later, so fresh fuel replaces the previous discard
+            assert fresh == discarded[-2]
+            assert not core.held_inventory
+        fima = {k: v["FIMA"] for k, v in json.loads(
+            (tmp_path / f"synthetic_discharge_inventory{step}.json").read_text()).items()}
+        last, first = [v for k, v in fima.items() if k.endswith("G3")], [v for k, v in fima.items() if k.endswith("G1")]
+        if last and first:  # later passes are more burned
+            assert min(last) > max(first)
+    assert sum(discarded) >= 108  # the initial core has been discarded (after its 3 passes)
+
+
+def test_pass_averaging_conserves_atoms(core):
+    fresh = core.fresh_pebbles["fuel20"].concentrations
+    bin_ = Out_Of_Core_Bin()
+    expected = {}
+    for r, g, n, burned in ((1, 1, 5, 0.03), (2, 1, 7, 0.05), (1, 2, 4, 0.10), (2, 2, 9, 0.12)):
+        name = f"discharge_fuel20_R{r}Z3G{g}"
+        conc = {k: v * (1 - burned) for k, v in fresh.items()}
+        core.materials[name] = Material(name, conc)
+        bin_.inventory[name] = n
+        expected[g] = expected.get(g, 0.0) + n * conc["92235<lib>"]
+    core.max_passes = 3
+    core.volume_average_by_pass(bin_)
+    assert bin_.inventory == {"avgdischarge_fuel20_G1": 12, "avgdischarge_fuel20_G2": 13}
+    for g, atoms in expected.items():
+        key = f"avgdischarge_fuel20_G{g}"
+        assert bin_.inventory[key] * core.materials[key].concentrations["92235<lib>"] == pytest.approx(atoms)
+
+
+@pytest.mark.parametrize("mode", ["pass", "burnup"])
+def test_fuel_types_sharing_a_name_prefix_are_kept_apart(core, mode):
+    """'fuel1' must not collect 'fuel15' pebbles (substring match in the averaging)."""
+    fresh = core.fresh_pebbles["fuel20"].concentrations
+    bin_ = Out_Of_Core_Bin()
+    for fuel_type, scale in (("fuel1", 0.9), ("fuel15", 0.8)):
+        name = f"discharge_{fuel_type}_R1Z3G1"
+        core.materials[name] = Material(name, {k: v * scale for k, v in fresh.items()})
+        bin_.inventory[name] = 9
+    if mode == "pass":
+        core.volume_average_by_pass(bin_)
+    else:
+        core.volume_average_by_burnup(bin_)
+    by_type = {}
+    for key, n in bin_.inventory.items():
+        by_type[key.split("_")[1]] = by_type.get(key.split("_")[1], 0) + n
+    assert by_type == {"fuel1": 9, "fuel15": 9}
+    for key in bin_.inventory:
+        scale = 0.9 if key.split("_")[1] == "fuel1" else 0.8
+        assert core.materials[key].concentrations["92235<lib>"] == pytest.approx(fresh["92235<lib>"] * scale)

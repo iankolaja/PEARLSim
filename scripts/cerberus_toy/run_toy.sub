@@ -4,8 +4,8 @@
 #   ~/envs/pearlsim/bin/python scripts/cerberus_toy/build_toy.py $TOY --scale-pebbles 3000000
 # then submit from the PEARLSim directory:
 #   sbatch --export=ALL,TOY=/global/scratch/users/ikolaja/PEARLSim_dev/cerberus_toy scripts/cerberus_toy/run_toy.sub
-# Results: $TOY/results.json (written part by part). If preempted and requeued, the driver
-# simply reruns all parts.
+# Results: $TOY/results.json (written part by part). If preempted and requeued, finished
+# reference runs are reused and the live parts rerun.
 #SBATCH --job-name=cerberus_toy
 #SBATCH --output=slurm_cerberus_toy_%j.out
 #SBATCH --partition=savio4_htc

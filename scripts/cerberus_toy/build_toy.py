@@ -129,7 +129,11 @@ def deck_for(deck_text, pebble_file, volumes, all_fuel):
         text, n = re.subn(rf"^  {re.escape(mat)} 1 \S+$", f"  {mat} 1 {vol_str}", text, flags=re.M)
         if n != 1:
             raise ValueError(f"mvol line for {mat} not found exactly once")
-    return text
+    # Initial source guess confined to the cluster: the default fission-source sampling over the
+    # whole core rarely hits the toy's fuel and Serpent aborts ("Unable to sample fission source").
+    # src with srad/sz limits: docs/serpent/cards_reference.md §4 src (syntax/src.rst).
+    r_max, z_min, z_max = CLUSTER["r_max"], CLUSTER["z_min"], CLUSTER["z_max"]
+    return text + f"\n% initial source guess over the pebble cluster\nsrc toysrc srad 0.0 {r_max} sz {z_min} {z_max}\n"
 
 
 def main(argv=None):
@@ -194,8 +198,21 @@ def main(argv=None):
     live = os.path.join(out, "live")
     os.makedirs(live, exist_ok=True)
     write_pebble_file(os.path.join(live, "pool.csv"), pool_xyz, pool_mat, manifest["layouts"]["A"]["pool_radius"])
+    # No "set inventory" in live decks: the HxF build reads each inventory entry's name at the
+    # nuclide-name offset while listing output variables (sendoutputvardefsmpilocal.c:106 vs
+    # locations.h INVENTORY_PTR_NAME) and aborts with "GetText: Invalid pointer". The inventory only
+    # selects _dep.m output; live compositions come from sss_ov_composition_*.
+    live_text, n = re.subn(r"^set inventory .*\n", "", deck_text, flags=re.M)
+    if n != 1:
+        raise ValueError(f"expected one 'set inventory' line, found {n}")
+    # Cumulative steps: the HxF MoveToTime (advance_to_time) supports only daytot/dectot/acttot
+    # (butot is converted) and dies with "Unsupported step type 3" on daystep (movetotime.c:89-127).
+    # One step of daytot T equals daystep T. dep modes: docs/serpent/cards_reference.md (dep).
+    live_text, n = re.subn(r"^dep daystep ", "dep daytot ", live_text, flags=re.M)
+    if n != 1:
+        raise ValueError(f"expected one 'dep daystep' line, found {n}")
     with open(os.path.join(live, "live.serpent"), "w") as f:
-        f.write(deck_for(deck_text, "pool.csv", manifest["layouts"]["A"]["fuel_volumes"], all_fuel))
+        f.write(deck_for(live_text, "pool.csv", manifest["layouts"]["A"]["fuel_volumes"], all_fuel))
 
     if args.scale_pebbles:
         extra = args.scale_pebbles - len(pool_mat)

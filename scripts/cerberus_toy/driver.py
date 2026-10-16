@@ -60,7 +60,7 @@ def res_values(path, key):
     with open(path) as f:
         for line in f:
             if line.startswith(key + " "):
-                out.append([float(v) for v in line.split("[", 1)[1].split("]")[0].split()])
+                out.append([float(v) for v in line.split("= [", 1)[1].split("]")[0].split()])
     return out
 
 
@@ -74,14 +74,14 @@ def run_reference(toy, name, exe, omp):
     res = os.path.join(ref, deck + "_res.m")
     if code != 0 or not os.path.exists(res):
         return {"returncode": code, "wall_s": wall}
-    imp = res_values(res, "IMP_KEFF")
+    imp = res_values(res, "ANA_KEFF")
     init = res_values(res, "INIT_TIME")
     bumat = read_bumat(os.path.join(ref, deck + ".bumat1")) if os.path.exists(os.path.join(ref, deck + ".bumat1")) else {}
     return {"returncode": code, "wall_s": wall,
             "k_bos": imp[0][0], "k_bos_rel_unc": imp[0][1], "k_eos": imp[-1][0], "k_eos_rel_unc": imp[-1][1],
             "init_time_min": init[0][0] if init else None,
             "u235_eos": {m: c.get("92235<lib>") for m, c in bumat.items()},
-            "xe135_eos": {m: c.get("541350") for m, c in bumat.items()}}
+            "xe135_eos": {m: c.get("54135<lib>") for m, c in bumat.items()}}
 
 
 class Live:
@@ -114,8 +114,8 @@ class Live:
         return np.array(variable.value_vec)
 
     def k(self):
-        k = float(self.get("sss_ov_IMP_KEFF")[0])
-        return k, float(self.get("sss_ov_IMP_KEFF_rel_unc")[0])
+        k = float(self.get("sss_ov_ANA_KEFF")[0])
+        return k, float(self.get("sss_ov_ANA_KEFF_rel_unc")[0])
 
     def child(self, material):
         """Name of the auto-divided burnable child of a material (e.g. fuel20_R1Z1G1pp2r1)."""
@@ -126,10 +126,14 @@ class Live:
         return found[0]
 
     def set_volumes(self, volumes):
-        """Volume of each fuel material (parent and child); resend compositions to flag the update."""
+        """Volume of each fuel material's divided child; resend compositions to flag the update.
+
+        The parent's own volume is not settable live (sss_iv_material_div_<parent>_volume writes the
+        children, receivevardata.c:787). It only weights SumDivCompositions' parent composition, which
+        transport, depletion and this driver do not use.
+        """
         for mat, vol in volumes.items():
             child = self.child(mat)
-            self.send(f"sss_iv_material_{mat}_volume", [vol])
             self.send(f"sss_iv_material_{child}_volume", [vol])
             self.send(f"sss_iv_composition_{child}_adens", self.get(f"sss_ov_composition_{child}_adens"))
 
@@ -218,10 +222,12 @@ def part_empty(toy, manifest, results, exe, omp, port):
         live.solver.set_current_time(0.0)
         live.send("sss_iv_pbed_u_pb_xyzr", xyzr(manifest, "C", toy))
         volumes = dict(manifest["layouts"]["C"]["fuel_volumes"])
-        volumes.update({m: 0.0 for m in manifest["fuel_materials"] if m not in volumes})
+        # Serpent rejects a burnable material with volume 0 ("Volume or mass ... must be given"), so the
+        # emptied slot gets the same tiny volume as in ref_C.
+        volumes.update({m: manifest["empty_volume"] for m in manifest["fuel_materials"] if m not in volumes})
         live.set_volumes(volumes)
         live.solver.solve()
-        out["C_volume_0"] = compare(live.k(), refs["C"]["k_bos"], refs["C"]["k_bos_rel_unc"])
+        out["C_empty_slot"] = compare(live.k(), refs["C"]["k_bos"], refs["C"]["k_bos_rel_unc"])
     except Exception:  # noqa: BLE001
         out["error"] = traceback.format_exc()
     results["empty"] = out
@@ -267,6 +273,8 @@ def main(argv=None):
     if "refs" in parts:
         refs = results.get("refs", {})
         for name in ("A", "B", "C"):
+            if refs.get(name, {}).get("returncode") == 0 and "k_bos" in refs[name]:
+                continue  # finished in an earlier job (or before a requeue)
             refs[name] = run_reference(toy, name, args.exe, args.omp)
             results["refs"] = refs
     for offset, (part, fn) in enumerate((("live", part_live), ("empty", part_empty), ("scale", part_scale))):

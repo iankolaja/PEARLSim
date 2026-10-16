@@ -49,6 +49,46 @@ def test_v1_record_from_output_files(equilibrium_dir, expected):
     assert json.loads(json.dumps(record)) == record  # serialisable as is
 
 
+def test_smoothed_burnup_on_v1_fixture(equilibrium_dir):
+    record = records.build_record(str(equilibrium_dir), RUN, STEP)
+    smooth = record["discharge_smooth"]
+    with open(os.path.join(equilibrium_dir, f"{RUN}_discharge_inventory{STEP}.json")) as f:
+        discharge = json.load(f)
+    fuel = sum(v["count"] for k, v in discharge.items() if "graph" not in k)
+    assert smooth["discharge_fuel_pebbles"] == fuel
+    fracs = [smooth[f"burnup_smooth_bin{i}_frac"] for i in range(1, 10)]
+    assert sum(fracs) == pytest.approx(1.0)
+    assert smooth["burnup_smooth_p10"] <= smooth["burnup_smooth_p50"] <= smooth["burnup_smooth_p90"]
+    # rel_std = 0 gives v1's hard bins, normalised
+    hard = records.smoothed_discharge_burnup(discharge, 0.0)
+    for i in range(1, 10):
+        assert hard[f"burnup_smooth_bin{i}_frac"] == pytest.approx(record["discharge"][f"burnup_bin{i}_count"] / fuel)
+    row = records.flatten(record, meshes=False)
+    assert row["burnup_smooth_bin1_frac"] == smooth["burnup_smooth_bin1_frac"]
+
+
+def test_smoothed_burnup_is_continuous_across_bin_edges():
+    edge = records.SMOOTH_BURNUP_EDGES[4]  # 10 % FIMA
+    below = {"discharge_fuel20_R1Z10G1": {"count": 1000, "FIMA": edge - 1e-3},
+             "discharge_graphpeb_R1Z10G1": {"count": 500, "FIMA": 0.0}}
+    above = {"discharge_fuel20_R1Z10G1": {"count": 1000, "FIMA": edge + 1e-3}}
+    jumps = {}
+    for rel_std in (0.0, 0.02576):
+        a = records.smoothed_discharge_burnup(below, rel_std)
+        b = records.smoothed_discharge_burnup(above, rel_std)
+        assert a["discharge_fuel_pebbles"] == 1000  # graphite excluded
+        jumps[rel_std] = max(abs(a[k] - b[k]) for k in a if k.startswith("burnup_smooth_bin"))
+    assert jumps[0.0] == pytest.approx(1.0)  # hard bins: the whole group changes bin
+    # smoothed: Gaussian density at the edge times the shift, pdf(0) * 2e-3 / (0.02576 * 10)
+    assert jumps[0.02576] == pytest.approx(0.3989 * 2e-3 / 0.2576, rel=0.01)
+
+
+def test_smoothed_burnup_without_discharged_fuel():
+    out = records.smoothed_discharge_burnup({"discharge_graphpeb_R1Z1G1": {"count": 10, "FIMA": 0.0}}, 0.02576)
+    assert out["discharge_fuel_pebbles"] == 0
+    assert all(v == 0.0 for v in out.values())
+
+
 def test_power_summary_on_known_mesh():
     power = np.ones((8, 20))
     power[0, 0] = 5.0

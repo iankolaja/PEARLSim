@@ -34,7 +34,12 @@ import numpy as np
 
 from pearlsim import replicas
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2  # 2: adds "discharge_smooth"
+
+# Smoothed discharge burnup: same range and edges as v1's burnup_bin features (BURNUP_BINS_9)
+SMOOTH_BURNUP_EDGES = np.linspace(0.0, 22.5, 10)  # FIMA, %
+SMOOTH_BURNUP_QUANTILES = (0.1, 0.5, 0.9)
+DEFAULT_FIMA_REL_STD = 0.02576  # Simulation default for fima_discharge_rel_std
 
 # _res.m scalars copied into the record's "serpent" block (first occurrence in the file)
 RES_METADATA = {"VERSION": str, "COMPILE_DATE": str, "XS_DATA_FILE_PATH": str, "DECAY_DATA_FILE_PATH": str,
@@ -42,6 +47,57 @@ RES_METADATA = {"VERSION": str, "COMPILE_DATE": str, "XS_DATA_FILE_PATH": str, "
                 "OMP_THREADS": int, "MPI_TASKS": int}
 CONTROLS = ("power", "burnup_step", "graphite_insertion_fraction", "control_rod_position",
             "fima_discharge_threshold", "fima_discharge_rel_std")
+
+
+def smoothed_discharge_burnup(discharge, rel_std, edges=SMOOTH_BURNUP_EDGES, quantiles=SMOOTH_BURNUP_QUANTILES):
+    """Discharged-fuel burnup distribution with each group spread over a Gaussian.
+
+    v1's ``burnup_bin<i>_count`` puts all pebbles of a discharged group (one average FIMA
+    per zone x burnup group) into the single bin that average falls in, so a count jumps
+    by a whole group when the average crosses an edge. Here each group of ``count``
+    pebbles at FIMA F is spread as N(F, (rel_std F)^2): the within-group spread the
+    discard decision already assumes (zone.Zone.remove_threshold). Pebble counts are
+    conserved (mass below the first edge goes to the first bin, above the last edge to
+    the last bin), and rel_std = 0 gives v1's hard bins. Measurement noise is not added
+    here; the ML noise model (pearlsim.ml.features.NoiseModel) applies it later.
+
+    Returns ``discharge_fuel_pebbles``, ``burnup_smooth_bin<i>_frac`` (summing to 1) and
+    ``burnup_smooth_p<q>`` (FIMA %, quantiles of the mixture). With no fuel discharged the
+    fractions and quantiles are 0, as v1 fills ``avg_FIMA``.
+    """
+    from scipy.stats import norm
+
+    groups = [(float(v["count"]), float(v["FIMA"])) for key, v in discharge.items()
+              if "graph" not in key and float(v["count"]) > 0]
+    n_bins = len(edges) - 1
+    total = sum(count for count, _ in groups)
+    out = {"discharge_fuel_pebbles": total}
+    if total == 0:
+        out.update({f"burnup_smooth_bin{i + 1}_frac": 0.0 for i in range(n_bins)})
+        out.update({f"burnup_smooth_p{round(q * 100)}": 0.0 for q in quantiles})
+        return out
+
+    counts = np.array([c for c, _ in groups])
+    fima = np.array([f for _, f in groups])
+    sigma = rel_std * fima
+
+    def mixture_cdf(x):
+        """Fraction of discharged fuel pebbles with burnup <= x (x: 1-D array)."""
+        x = np.asarray(x, dtype=float)[:, None]
+        with np.errstate(divide="ignore", invalid="ignore"):
+            smooth = norm.cdf((x - fima) / np.where(sigma > 0, sigma, 1.0))
+        cdf = np.where(sigma > 0, smooth, (x >= fima).astype(float))
+        return cdf @ counts / total
+
+    inner = mixture_cdf(edges[1:-1])
+    bounds = np.concatenate([[0.0], inner, [1.0]])
+    for i, frac in enumerate(np.diff(bounds)):
+        out[f"burnup_smooth_bin{i + 1}_frac"] = float(frac)
+    grid = np.linspace(0.0, max(edges[-1], float((fima + 6 * sigma).max())), 6001)
+    cdf = mixture_cdf(grid)
+    for q in quantiles:
+        out[f"burnup_smooth_p{round(q * 100)}"] = float(grid[min(np.searchsorted(cdf, q), len(grid) - 1)])
+    return out
 
 
 def record_file(run_name, step):
@@ -229,10 +285,14 @@ def build_record(directory, run_name, step, num_replicas=None, days=None, proven
         inventory = inventory_summary(zone_map, _load_json(path(f"{run_name}_held_inventory{step}.json")))
         if inventory["fuel_pebbles"] and isinstance(controls["power"], float):
             inventory["power_per_fuel_pebble"] = controls["power"] / inventory["fuel_pebbles"]
-    discharge = None
+    discharge = discharge_smooth = None
     if os.path.isfile(path(f"{run_name}_discharge_inventory{step}.json")):
         _, features = extract_lstm_input_features(directory, step, run_name=run_name, merge=False)
         discharge = {key: float(value) for key, value in features.items()}
+        rel_std = controls["fima_discharge_rel_std"]
+        discharge_smooth = smoothed_discharge_burnup(
+            _load_json(path(f"{run_name}_discharge_inventory{step}.json")),
+            rel_std if isinstance(rel_std, float) else DEFAULT_FIMA_REL_STD)
     spread = _load_json(path(f"{run_name}_replica_spread_{step}.json"))
     spread_summary = None
     if spread:
@@ -267,6 +327,7 @@ def build_record(directory, run_name, step, num_replicas=None, days=None, proven
                    "det_file": runs[0]["det_file"]},
         "inventory": inventory,
         "discharge": discharge,
+        "discharge_smooth": discharge_smooth,
         "replica_spread": spread_summary,
         "serpent": [run["serpent"] for run in runs],
         "provenance": provenance or {},
@@ -311,6 +372,7 @@ def flatten(record, meshes=True):
     for c, value in enumerate(inventory.get("channel_fuel_fraction") or []):
         row[f"R{c + 1}_fuel_fraction"] = value
     row.update(record["discharge"] or {})
+    row.update(record.get("discharge_smooth") or {})  # schema >= 2
     for key, value in (record["replica_spread"] or {}).items():
         if key.startswith("max_rel_std"):
             row[f"replica_{key}"] = value

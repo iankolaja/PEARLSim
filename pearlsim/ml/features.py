@@ -16,12 +16,19 @@ V1_CORE_PEBBLES = 250_131  # pebbles in the v1 gFHR model (zone maps of gFHR_ben
 DEPENDENT_FEATURES = (["R1_avg_FIMA_last_pass", "R2_avg_FIMA_last_pass", "R3_avg_FIMA_last_pass",
                        "R4_avg_FIMA_last_pass"] + [f"burnup_bin{b}_count" for b in range(1, 10)]
                       + ["avg_FIMA", "num_discarded"])
+# v2 alternative to the hard burnup bins: Gaussian-smoothed discharge burnup (records.smoothed_discharge_burnup)
+DEPENDENT_FEATURES_SMOOTH = (DEPENDENT_FEATURES[:4] + [f"burnup_smooth_bin{b}_frac" for b in range(1, 10)]
+                             + ["burnup_smooth_p10", "burnup_smooth_p50", "burnup_smooth_p90",
+                                "discharge_fuel_pebbles", "avg_FIMA", "num_discarded"])
 CONTROL_FEATURES = ["power", "burnup_step", "graphite_insertion_fraction", "control_rod_position",
                     "fima_discharge_threshold"]
 
 # Paper Table "MAPE applied to each dependent input variable" (fractions); sigma = MAPE / sqrt(2/pi)
 PAPER_NOISE_MAPE = {"burnup_bin*_count": 0.05, "avg_FIMA": 0.025, "num_discarded": 0.05,
-                    "R*_avg_FIMA_last_pass": 0.10}
+                    "R*_avg_FIMA_last_pass": 0.10,
+                    # provisional, not from the paper: smoothed fractions as bin counts, quantiles as
+                    # avg_FIMA, the discharged fuel count as num_discarded
+                    "burnup_smooth_bin*_frac": 0.05, "burnup_smooth_p*": 0.025, "discharge_fuel_pebbles": 0.05}
 
 
 def v1_power_per_fuel_pebble(frame, num_pebbles=V1_CORE_PEBBLES, residence_steps=10):

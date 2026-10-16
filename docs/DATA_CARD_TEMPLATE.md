@@ -40,6 +40,7 @@ and its `.meta.json`; don't type them by hand.
   - inventory: `fuel_pebbles`, `graphite_pebbles`, `fuel_fraction`, `R*_fuel_fraction`,
     `held_pebbles`, `power_per_fuel_pebble`;
   - discharge features: `R*_avg_FIMA_last_pass`, `burnup_bin*_count`, `avg_FIMA`, `num_discarded`;
+  - smoothed discharge burnup (record schema 2): `burnup_smooth_bin*_frac` (Gaussian-spread groups, normalised), `burnup_smooth_p10/p50/p90` (FIMA %), `discharge_fuel_pebbles`;
   - targets: `keff_bos`/`keff_eos` (mean, `_unc`, `_rep*`, `_rep_std`), `rho_*_pcm`,
     `fluxR*Z*E*`, `powerR*Z*`, `zone_power_fracR*Z*`, `peaking_*`;
   - provenance: `serpent_version`, `serpent_pop`, `running_time_min`, ….

@@ -101,6 +101,21 @@ def test_v1_template_rendering_is_unchanged_apart_from_therm_marker(repo_root):
     assert rendered.replace("MARK", registry.cards()) == template
 
 
+def test_flibe_li6_setting_changes_only_the_lithium_lines(repo_root):
+    """Benchmark FLiBe: 99.995 at.% Li-7 = 50 ppm Li-6 (Satvat 2021 Table 2); the template has 25 ppm."""
+    with open(f"{repo_root}/gFHR_template.serpent") as f:
+        template = f.read()
+    v1 = CoreConditions()
+    li6 = CoreConditions(salt_li6_ppm=50.0)
+    base = render_template(template, ENDF7_V1, v1, ThermRegistry(ENDF7_V1, v1), "MARK").split("\n")
+    fixed = render_template(template, ENDF7_V1, li6, ThermRegistry(ENDF7_V1, li6), "MARK").split("\n")
+    changed = [(a.split(), b.split()) for a, b in zip(base, fixed, strict=True) if a != b]
+    assert changed == [(["3007.09c", "1.999950"], ["3007.09c", "1.99990000"]),
+                       (["3006.09c", "0.000050"], ["3006.09c", "0.00010000"])] * 2  # FLiBe, FLiBeInC
+    assert thermal.uncoupled_conditions().salt_li6_ppm == 50.0
+    assert thermal.core_conditions(280e6, 250_190).salt_li6_ppm == 50.0
+
+
 def render_v2(tmp_path, power=140e6, coupled=True):
     core = build_core(tmp_path / "case")
     for channel in core.zones:

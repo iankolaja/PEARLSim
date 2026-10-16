@@ -7,10 +7,12 @@ generate_input -> "Serpent" -> update_from_bumat) with the fake Serpent executab
 import json
 import os
 import pickle
+import re
 
 import pytest
 from helpers.synthetic import setup_lines, write_core
 
+from pearlsim.nuclear_data import CoreConditions
 from pearlsim.simulation import DeckError, SerpentError, Simulation
 
 pytestmark = pytest.mark.characterization
@@ -60,7 +62,8 @@ def test_insertion_sequence_end_to_end(tmp_path, fake_serpent_command, monkeypat
     assert operating == {"power": 1.0e6, "burnup_step": STEP_DAYS, "graphite_insertion_fraction": 0.5,
                          "control_rod_position": 300.0, "fima_discharge_threshold": 18.63,
                          "fima_discharge_rel_std": 0.02288, "base_seed": 7, "replicas": 1,
-                         "nuclear_data": "endf7_v1", "thermal_coupling": False, "temperatures": None}
+                         "nuclear_data": "endf7_v1", "thermal_coupling": False, "flibe_li6_ppm": 25.0,
+                         "temperatures": None}
     assert f"set seed {serpent_seed}\n" in (run / "synthetic_5.serpent").read_text()
     seeds = {json.loads((run / f"synthetic_operating_{s}.json").read_text())["serpent_seed"] for s in range(1, 6)}
     assert len(seeds) == 5  # a different Serpent seed every step
@@ -90,6 +93,14 @@ def test_serpent_failure_raises_serpent_error(tmp_path, fake_serpent_command, mo
 @pytest.fixture
 def sim():
     return Simulation("synthetic")
+
+
+def test_flibe_li6_keyword(sim):
+    sim.read_input_line("set_flibe_li6_ppm 50\n")
+    sim.update_conditions()  # v1 library, no coupling: v1 temperatures with the Li-6 fix
+    assert sim.core.conditions == CoreConditions(salt_li6_ppm=50.0)
+    with pytest.raises(DeckError):
+        sim.read_input_line("set_flibe_li6_ppm -1\n")
 
 
 def test_set_options_are_stored_as_normalised_text(sim):
@@ -181,6 +192,8 @@ def test_endf8_thermal_coupling_end_to_end(tmp_path, fake_serpent_command, monke
         assert validate_deck(deck, ENDF8_LIB80X) == []
         operating = json.loads((run / f"synthetic_operating_{step}.json").read_text())
         assert operating["nuclear_data"] == "endf8_lib80x" and operating["thermal_coupling"] is True
+        assert operating["flibe_li6_ppm"] == 50.0
+        assert re.search(r"^\s+3006\.\d\dc\s+0\.00010000$", deck, re.M)
         temps = operating["temperatures"]
         # 1 MW of 280 MW: everything a little above the 823.15 K inlet; fuel hottest
         assert 823.15 < temps["salt"] < temps["matrix"] < temps["kernel"] < 900

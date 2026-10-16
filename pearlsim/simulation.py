@@ -20,7 +20,7 @@ import pandas as pd
 from pearlsim import records, replicas
 from pearlsim.core import Core
 from pearlsim.material import Material
-from pearlsim.nuclear_data import ENDF7_V1, PROFILES
+from pearlsim.nuclear_data import ENDF7_V1, PROFILES, V1_FLIBE_LI6_PPM, CoreConditions
 from pearlsim.thermal import core_conditions, uncoupled_conditions
 
 logger = logging.getLogger(__name__)
@@ -54,6 +54,7 @@ class Simulation:
         self.replicas = 1  # independent Serpent runs per step, averaged (set_replicas)
         self.replica_mode = "concurrent"
         self.dataset_version = None  # recorded in every step record (set_dataset_version)
+        self.flibe_li6_ppm = None  # set_flibe_li6_ppm; None: v1 template (25 ppm) unless v2 conditions apply
         self._provenance = None
 
     # ------------------------------------------------------------------ deck parsing
@@ -223,6 +224,13 @@ class Simulation:
     def _kw_set_dataset_version(self, args):
         self.dataset_version = args[0]
 
+    def _kw_set_flibe_li6_ppm(self, args):
+        """set_flibe_li6_ppm <ppm>: Li-6 share of FLiBe lithium (atom ppm). Benchmark: 50; v1 decks: 25."""
+        value = float(args[0])
+        if not 0 <= value < 1e6:
+            raise DeckError(f"set_flibe_li6_ppm must be in [0, 1e6) ppm, not {args[0]!r}")
+        self.flibe_li6_ppm = value
+
     def _kw_set_replicas(self, args):
         """set_replicas <n> [concurrent|sequential]: n reshuffled Serpent runs per step, averaged."""
         num = int(args[0])
@@ -277,12 +285,15 @@ class Simulation:
 
     def update_conditions(self):
         """Set the component temperatures used to render this step's deck."""
+        li6 = {} if self.flibe_li6_ppm is None else {"li6_ppm": self.flibe_li6_ppm}
         if self.thermal_coupling:
             # power per fuel pebble is normalised to an all-fuel core of this model's pebble count
             self.core.conditions = core_conditions(float(self.power), self.fuel_pebbles_in_core(),
-                                                   nominal_pebbles=len(self.core.pebble_locations))
+                                                   nominal_pebbles=len(self.core.pebble_locations), **li6)
         elif self.core.nuclear_data is not ENDF7_V1:
-            self.core.conditions = uncoupled_conditions()
+            self.core.conditions = uncoupled_conditions(**li6)
+        elif self.flibe_li6_ppm is not None:
+            self.core.conditions = CoreConditions(salt_li6_ppm=self.flibe_li6_ppm)  # v1 temperatures
         else:
             self.core.conditions = None  # v1 rendering
 
@@ -304,6 +315,8 @@ class Simulation:
                 "serpent_seed": serpent_seed,
                 "nuclear_data": self.core.nuclear_data.name,
                 "thermal_coupling": self.thermal_coupling,
+                "flibe_li6_ppm": (V1_FLIBE_LI6_PPM if conditions is None or conditions.salt_li6_ppm is None
+                                  else conditions.salt_li6_ppm),
                 "temperatures": temperatures}
 
     def shuffle_rng(self, iteration, replica):

@@ -28,12 +28,16 @@ T_MOD_NOMINAL = 928.9
 T_REFLECTOR_NOMINAL = 858.9
 
 
+FLIBE_LI6_PPM = 50.0  # 99.995 at.% Li-7 (Satvat et al. 2021, Table 2); v1 decks had 25 ppm
+
+
 def salt_density(temperature):
     """FLiBe density in g/cm3 (linear correlation; 1.9872 at the nominal mean salt temperature)."""
     return 2.413 - 4.88e-4 * temperature
 
 
-def core_conditions(power, fuel_pebbles, nominal_power=NOMINAL_POWER, nominal_pebbles=NOMINAL_PEBBLES):
+def core_conditions(power, fuel_pebbles, nominal_power=NOMINAL_POWER, nominal_pebbles=NOMINAL_PEBBLES,
+                    li6_ppm=FLIBE_LI6_PPM):
     """Per-component temperatures for total power ``power`` (W) with ``fuel_pebbles`` fuel pebbles in core."""
     if power < 0:
         raise ValueError("power must be non-negative")
@@ -53,14 +57,14 @@ def core_conditions(power, fuel_pebbles, nominal_power=NOMINAL_POWER, nominal_pe
         dummy=t_salt, salt=t_salt,
         reflector=T_INLET + (T_REFLECTOR_NOMINAL - T_INLET) * x,
         structure=T_INLET,
-        salt_density=salt_density(t_salt),
+        salt_density=salt_density(t_salt), salt_li6_ppm=li6_ppm,
         shared_graphite_sab=None, sic_sab="sic",
     )
 
 
-def uncoupled_conditions(temperature=900.0, fuel_temperature=959.0):
+def uncoupled_conditions(temperature=900.0, fuel_temperature=959.0, li6_ppm=FLIBE_LI6_PPM):
     """v2 data without thermal feedback: fixed temperatures, but per-component S(a,b) and SiC S(a,b)."""
     return CoreConditions(kernel=fuel_temperature, coating=fuel_temperature, matrix=fuel_temperature,
                           pebble_graphite=temperature, dummy=temperature, salt=temperature,
                           reflector=temperature, structure=temperature, salt_density=None,
-                          shared_graphite_sab=None, sic_sab="sic")
+                          salt_li6_ppm=li6_ppm, shared_graphite_sab=None, sic_sab="sic")

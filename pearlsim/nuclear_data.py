@@ -117,6 +117,9 @@ class CoreConditions:
     reflector: float = 900.0
     structure: float = 900.0       # steel barrel/vessel and B4C rods
     salt_density: float = None     # g/cm3; None keeps the template value
+    # Li-6 share of FLiBe lithium in atom ppm; None keeps the template's 25 ppm (v1: 0.00005 Li-6 per
+    # 2 Li). The gFHR benchmark specifies 99.995 at.% Li-7, i.e. 50 ppm (Satvat et al. 2021, Table 2).
+    salt_li6_ppm: float = None
     shared_graphite_sab: float = 900.0  # v1: one 'grph' therm at this T; None = per component
     sic_sab: str = "graphite"      # v1: 'graphite'; v2: 'sic'
 
@@ -236,6 +239,8 @@ def render_template(text, profile, conditions, registry, therm_marker="%%PEARLSI
     out = []
     component = None
     for line in text.split("\n"):
+        if component == "salt" and conditions.salt_li6_ppm is not None:
+            line = _set_lithium(line, conditions.salt_li6_ppm)
         if line.startswith("mat "):
             name = line.split()[1]
             component = TEMPLATE_COMPONENTS.get(name)
@@ -273,6 +278,21 @@ def render_template(text, profile, conditions, registry, therm_marker="%%PEARLSI
             component = None if not line.strip() else component
         out.append(line)
     return "\n".join(out)
+
+
+V1_FLIBE_LI6_PPM = 25.0  # core template: 0.00005 Li-6 per 2 Li
+FLIBE_LI_PER_FORMULA = 2.0  # Li2BeF4: the template lists Li-7 + Li-6 = 2, Be 1, F 4 (atom ratios)
+
+
+def _set_lithium(line, li6_ppm):
+    """Rewrite a FLiBe Li-7 or Li-6 atom-ratio line for a Li-6 share of ``li6_ppm`` (atom ppm of Li)."""
+    match = _NUCLIDE_LINE.match(line)
+    if not match or match.group(2) not in ("3006", "3007"):
+        return line
+    indent, za, space, _ = match.groups()
+    li6 = FLIBE_LI_PER_FORMULA * li6_ppm * 1e-6
+    value = li6 if za == "3006" else FLIBE_LI_PER_FORMULA - li6
+    return f"{indent}{za}.09c{space}{value:.8f}"
 
 
 _MAT_HEADER = re.compile(r"^mat\s+(\S+)\s.*?\btmp\s+(\S+)")

@@ -60,7 +60,8 @@ def res_values(path, key):
     with open(path) as f:
         for line in f:
             if line.startswith(key + " "):
-                out.append([float(v) for v in line.split("= [", 1)[1].split("]")[0].split()])
+                values = line.split("=", 1)[1].split(";")[0].replace("[", " ").replace("]", " ")
+                out.append([float(v) for v in values.split()])
     return out
 
 

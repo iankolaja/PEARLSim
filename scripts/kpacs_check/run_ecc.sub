@@ -1,0 +1,32 @@
+#!/bin/sh
+# ECC cross-check: Kairos's equilibrium compositions in PEARLSim's Serpent model, four variants
+# (see build_ecc_decks.py), two at a time on one node with 28 threads each (each Serpent
+# process takes ~75 GB with set memfrac 0.99; four at once ran out of memory, job 40050973).
+# Build first:  ~/envs/pearlsim/bin/python scripts/kpacs_check/build_ecc_decks.py $ECC/ecc.json $ECC
+# Submit from the PEARLSim directory:
+#   sbatch --export=ALL,ECC=/global/scratch/users/ikolaja/PEARLSim_dev/kpacs_check scripts/kpacs_check/run_ecc.sub
+# A variant with a _res.m already present is skipped (requeue-safe).
+#SBATCH --job-name=ecc_check
+#SBATCH --output=slurm_ecc_check_%j.out
+#SBATCH --partition=savio4_htc
+#SBATCH --time=03:00:00
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=56
+#SBATCH --qos=savio_lowprio
+#SBATCH -A co_nuclear
+#SBATCH --requeue
+
+module unload python gcc cmake
+module load cmake/3.27.7 gcc/11.4.0 openmpi/4.1.6 python/3.11.6-gcc-11.4.0
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/global/home/groups/co_nuclear/gd_library/code/lib
+SSS=/global/home/groups/co_nuclear/HxF_tools/serpent2.2.0_HxF_dev_wolibgd/sss2
+running=0
+for v in E_benchmark_li6 F_pearlsim_li6 B_tsl_off A_pearlsim C_tsl_off_900K D_benchmark; do
+    if [ -f "$ECC/$v/$v.serpent_res.m" ]; then echo "$v: done earlier"; continue; fi
+    (cd "$ECC/$v" && $SSS $v.serpent -omp 28 > serpent.log 2>&1; echo "$v: exit $?") &
+    running=$((running + 1))
+    if [ $running -eq 2 ]; then wait; running=0; fi
+done
+wait
+grep -H -m1 "^ANA_KEFF " "$ECC"/*/*_res.m

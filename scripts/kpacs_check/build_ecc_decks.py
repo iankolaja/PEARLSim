@@ -27,6 +27,9 @@ Variants (one directory each), in steps toward the benchmark's conditions:
   E_benchmark_li6  D with Flibe Li-6 at the specified 50 ppm of lithium (99.995 at.% Li-7; Satvat 2021
                    Table 2). The v1 template has 0.00005 Li-6 per 2 Li, i.e. 25 ppm (diagnostic only)
   F_pearlsim_li6   A with the same Li-6 correction
+  G_core_1410      E with the pebble's central graphite core at 1.41 g/cm3: the benchmark text sets the
+                   core density to 1,410 kg/m3 for buoyancy (Satvat 2021 §2, p. 2), while its Table 2
+                   and the template give 1,740 kg/m3
 Serpent cards follow docs/serpent/cards_reference.md (mat tmp/moder, therm, cell, set pop).
 """
 
@@ -55,7 +58,7 @@ SETTINGS = {
     "opti": "2", "gcu": "-1", "memfrac": "0.99", "repro": "0", "shbuf": "0 0", "outp": "100000",
     "nbuf": "1000", "ures": "1", "power": "2.8E+08",
 }
-VARIANTS = ("A_pearlsim", "B_tsl_off", "C_tsl_off_900K", "D_benchmark", "E_benchmark_li6", "F_pearlsim_li6")
+VARIANTS = ("A_pearlsim", "B_tsl_off", "C_tsl_off_900K", "D_benchmark", "E_benchmark_li6", "F_pearlsim_li6", "G_core_1410")
 
 
 def write_zones(path):
@@ -117,6 +120,12 @@ def li6_50ppm(deck):
 
 
 def variant(deck, name):
+    if name == "G_core_1410":
+        deck, n = re.subn(r"^mat pebgraph\s+-1\.74\b", "mat pebgraph  -1.41", variant(deck, "E_benchmark_li6"),
+                          flags=re.M)
+        if n != 1:
+            raise ValueError("pebgraph material not found")
+        return deck
     if name == "F_pearlsim_li6":
         return li6_50ppm(deck)
     if name == "E_benchmark_li6":

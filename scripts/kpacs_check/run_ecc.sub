@@ -22,7 +22,7 @@ module load cmake/3.27.7 gcc/11.4.0 openmpi/4.1.6 python/3.11.6-gcc-11.4.0
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/global/home/groups/co_nuclear/gd_library/code/lib
 SSS=/global/home/groups/co_nuclear/HxF_tools/serpent2.2.0_HxF_dev_wolibgd/sss2
 running=0
-for v in E_benchmark_li6 F_pearlsim_li6 B_tsl_off A_pearlsim C_tsl_off_900K D_benchmark; do
+for v in G_core_1410 E_benchmark_li6 F_pearlsim_li6 B_tsl_off A_pearlsim C_tsl_off_900K D_benchmark; do
     if [ -f "$ECC/$v/$v.serpent_res.m" ]; then echo "$v: done earlier"; continue; fi
     (cd "$ECC/$v" && $SSS $v.serpent -omp 28 > serpent.log 2>&1; echo "$v: exit $?") &
     running=$((running + 1))

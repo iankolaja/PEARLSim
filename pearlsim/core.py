@@ -176,7 +176,8 @@ class Core():
         self.rename_materials(rename_map)
 
         # held-out pebbles from earlier steps go back in first
-        reinsert_pool = list(self.held_inventory.items()) + list(self.reinsert_inventory.inventory.items())
+        reinsert_pool = list(self.held_inventory.items()) + self._to_bottom_zone_pebbles(
+            list(self.reinsert_inventory.inventory.items()))
 
         self.discharge_inventory.clear()
 
@@ -253,6 +254,21 @@ class Core():
             print(self.discharge_inventory.inventory)
 
         # Perform out of core burn calculations here
+
+    def _to_bottom_zone_pebbles(self, pool):
+        """Rescale (key, count) pairs discharged from the top zones to bottom-zone pebbles (review #39).
+
+        Zones propagate by fractions, each refilled to its own size, so per step the top zones
+        discharge sum(top sizes) pebbles while the bottom zones hold sum(bottom sizes). Without
+        this rescaling the difference piles up as held inventory and fresh fuel stops entering.
+        """
+        top = sum(channel[-1].num_pebbles for channel in self.zones)
+        bottom = sum(channel[0].num_pebbles for channel in self.zones)
+        total = sum(count for _, count in pool)
+        if not pool or top == bottom or total == 0:
+            return pool
+        counts = _largest_remainder(int(round(total * bottom / top)), [count for _, count in pool])
+        return [(key, int(n)) for (key, _), n in zip(pool, counts) if n]
 
     def fill_bottom_zones(self, insert_pebbles, reinsert_pool):
         """Refill the bottom zone of every radial channel, conserving recirculating pebbles.

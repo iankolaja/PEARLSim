@@ -291,6 +291,30 @@ def test_pass_mode_discards_after_max_passes_and_conserves_pebbles(core, tmp_pat
     assert sum(discarded) >= 108  # the initial core has been discarded (after its 3 passes)
 
 
+def test_recirculation_rescaled_when_bottom_zones_are_smaller(core):
+    """Review #39: with smaller bottom zones (as in gFHR_points.dat) fresh fuel keeps entering
+    and nothing piles up as held inventory."""
+    core.averaging_mode, core.max_passes = "pass", 3
+    for channel in core.zones:
+        bottom = channel[0]
+        bottom.pebble_locations = bottom.pebble_locations.iloc[:12].copy()
+        bottom.num_pebbles = 12
+        for zone in channel:
+            zone.inventory = {}
+            zone.initialize({"fuel20": 1.0})
+            core.initialize_materials(zone.inventory)
+    fresh = []
+    for step in range(1, 31):
+        core.iteration = step
+        core.insert(PASS_INSERT, THRESHOLD, REL_STD)
+        _burn_in_core(core)
+        assert not core.held_inventory  # unscaled: 36 discharged per step into 24 places
+        fresh.append(count(core, lambda k: k.endswith("G1") and "Z1G" in k))
+    # the initial core is discarded in waves; each bottom load is eventually replaced by fresh fuel
+    assert sum(fresh[3:]) >= 2 * 24
+    assert zone_totals(core) == [[12, 18, 18], [12, 18, 18]]
+
+
 def test_pass_averaging_conserves_atoms(core):
     fresh = core.fresh_pebbles["fuel20"].concentrations
     bin_ = Out_Of_Core_Bin()

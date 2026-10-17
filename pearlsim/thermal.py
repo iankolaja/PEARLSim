@@ -29,6 +29,7 @@ T_REFLECTOR_NOMINAL = 858.9
 
 
 FLIBE_LI6_PPM = 50.0  # 99.995 at.% Li-7 (Satvat et al. 2021, Table 2); v1 decks had 25 ppm
+PEBBLE_CORE_DENSITY = 1.41  # g/cm3, benchmark buoyancy value (Satvat 2021 §2; INL Table 2); v1 decks had 1.74
 
 
 def salt_density(temperature):
@@ -37,7 +38,7 @@ def salt_density(temperature):
 
 
 def core_conditions(power, fuel_pebbles, nominal_power=NOMINAL_POWER, nominal_pebbles=NOMINAL_PEBBLES,
-                    li6_ppm=FLIBE_LI6_PPM):
+                    li6_ppm=FLIBE_LI6_PPM, pebble_core_density=PEBBLE_CORE_DENSITY):
     """Per-component temperatures for total power ``power`` (W) with ``fuel_pebbles`` fuel pebbles in core."""
     if power < 0:
         raise ValueError("power must be non-negative")
@@ -57,14 +58,16 @@ def core_conditions(power, fuel_pebbles, nominal_power=NOMINAL_POWER, nominal_pe
         dummy=t_salt, salt=t_salt,
         reflector=T_INLET + (T_REFLECTOR_NOMINAL - T_INLET) * x,
         structure=T_INLET,
-        salt_density=salt_density(t_salt), salt_li6_ppm=li6_ppm,
+        salt_density=salt_density(t_salt), salt_li6_ppm=li6_ppm, pebble_core_density=pebble_core_density,
         shared_graphite_sab=None, sic_sab="sic",
     )
 
 
-def uncoupled_conditions(temperature=900.0, fuel_temperature=959.0, li6_ppm=FLIBE_LI6_PPM):
+def uncoupled_conditions(temperature=900.0, fuel_temperature=959.0, li6_ppm=FLIBE_LI6_PPM,
+                         pebble_core_density=PEBBLE_CORE_DENSITY):
     """v2 data without thermal feedback: fixed temperatures, but per-component S(a,b) and SiC S(a,b)."""
     return CoreConditions(kernel=fuel_temperature, coating=fuel_temperature, matrix=fuel_temperature,
                           pebble_graphite=temperature, dummy=temperature, salt=temperature,
                           reflector=temperature, structure=temperature, salt_density=None,
-                          salt_li6_ppm=li6_ppm, shared_graphite_sab=None, sic_sab="sic")
+                          salt_li6_ppm=li6_ppm, pebble_core_density=pebble_core_density,
+                          shared_graphite_sab=None, sic_sab="sic")

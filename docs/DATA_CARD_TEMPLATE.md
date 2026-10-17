@@ -17,7 +17,8 @@ and its `.meta.json`; don't type them by hand.
 - **Code:** PEARLSim {{version / git commit}} *(from records)*; Serpent {{VERSION, COMPILE_DATE}}
   *(from records)*, executable {{path}}.
 - **Geometry:** gFHR template {{file and commit}}; 4 radial × 10 axial zones; mesh detectors of 8 × 20
-  equal-volume cells (3 energy groups for flux).
+  equal-volume cells (3 energy groups for flux). Benchmark corrections (v2): FLiBe Li-6 {{flibe_li6_ppm, 50}} ppm,
+  pebble core graphite {{pebble_core_density, 1.41}} g/cm3 (v1 data: 25 ppm and 1.74; see docs/nuclear_data.md).
 - **Nuclear data:** {{profile, e.g. endf8_lib80x}}; libraries {{acelib / declib / nfylib}}; thermal
   scattering {{tables}}. See `docs/nuclear_data.md` and its change log.
 - **Temperatures:** {{uncoupled fixed values, or the power-coupled model of `pearlsim/thermal.py`

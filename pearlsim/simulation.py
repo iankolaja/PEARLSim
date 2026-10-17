@@ -20,7 +20,7 @@ import pandas as pd
 from pearlsim import records, replicas
 from pearlsim.core import Core
 from pearlsim.material import Material
-from pearlsim.nuclear_data import ENDF7_V1, PROFILES, V1_FLIBE_LI6_PPM, CoreConditions
+from pearlsim.nuclear_data import ENDF7_V1, PROFILES, V1_FLIBE_LI6_PPM, V1_PEBBLE_CORE_DENSITY, CoreConditions
 from pearlsim.thermal import core_conditions, uncoupled_conditions
 
 logger = logging.getLogger(__name__)
@@ -55,6 +55,7 @@ class Simulation:
         self.replica_mode = "concurrent"
         self.dataset_version = None  # recorded in every step record (set_dataset_version)
         self.flibe_li6_ppm = None  # set_flibe_li6_ppm; None: v1 template (25 ppm) unless v2 conditions apply
+        self.pebble_core_density = None  # set_pebble_core_density; None: v1 template (1.74) unless v2 conditions
         self._provenance = None
 
     # ------------------------------------------------------------------ deck parsing
@@ -231,6 +232,13 @@ class Simulation:
             raise DeckError(f"set_flibe_li6_ppm must be in [0, 1e6) ppm, not {args[0]!r}")
         self.flibe_li6_ppm = value
 
+    def _kw_set_pebble_core_density(self, args):
+        """set_pebble_core_density <g/cm3>: pebble central graphite core. Benchmark: 1.41; v1 decks: 1.74."""
+        value = float(args[0])
+        if not 0 < value < 3:
+            raise DeckError(f"set_pebble_core_density must be in (0, 3) g/cm3, not {args[0]!r}")
+        self.pebble_core_density = value
+
     def _kw_set_replicas(self, args):
         """set_replicas <n> [concurrent|sequential]: n reshuffled Serpent runs per step, averaged."""
         num = int(args[0])
@@ -285,15 +293,19 @@ class Simulation:
 
     def update_conditions(self):
         """Set the component temperatures used to render this step's deck."""
-        li6 = {} if self.flibe_li6_ppm is None else {"li6_ppm": self.flibe_li6_ppm}
+        overrides = {} if self.flibe_li6_ppm is None else {"li6_ppm": self.flibe_li6_ppm}
+        if self.pebble_core_density is not None:
+            overrides["pebble_core_density"] = self.pebble_core_density
         if self.thermal_coupling:
             # power per fuel pebble is normalised to an all-fuel core of this model's pebble count
             self.core.conditions = core_conditions(float(self.power), self.fuel_pebbles_in_core(),
-                                                   nominal_pebbles=len(self.core.pebble_locations), **li6)
+                                                   nominal_pebbles=len(self.core.pebble_locations), **overrides)
         elif self.core.nuclear_data is not ENDF7_V1:
-            self.core.conditions = uncoupled_conditions(**li6)
-        elif self.flibe_li6_ppm is not None:
-            self.core.conditions = CoreConditions(salt_li6_ppm=self.flibe_li6_ppm)  # v1 temperatures
+            self.core.conditions = uncoupled_conditions(**overrides)
+        elif self.flibe_li6_ppm is not None or self.pebble_core_density is not None:
+            # v1 temperatures with the benchmark corrections that were requested
+            self.core.conditions = CoreConditions(salt_li6_ppm=self.flibe_li6_ppm,
+                                                  pebble_core_density=self.pebble_core_density)
         else:
             self.core.conditions = None  # v1 rendering
 
@@ -317,6 +329,9 @@ class Simulation:
                 "thermal_coupling": self.thermal_coupling,
                 "flibe_li6_ppm": (V1_FLIBE_LI6_PPM if conditions is None or conditions.salt_li6_ppm is None
                                   else conditions.salt_li6_ppm),
+                "pebble_core_density": (V1_PEBBLE_CORE_DENSITY if conditions is None
+                                        or conditions.pebble_core_density is None
+                                        else conditions.pebble_core_density),
                 "temperatures": temperatures}
 
     def shuffle_rng(self, iteration, replica):

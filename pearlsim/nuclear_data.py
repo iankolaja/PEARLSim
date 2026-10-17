@@ -120,6 +120,9 @@ class CoreConditions:
     # Li-6 share of FLiBe lithium in atom ppm; None keeps the template's 25 ppm (v1: 0.00005 Li-6 per
     # 2 Li). The gFHR benchmark specifies 99.995 at.% Li-7, i.e. 50 ppm (Satvat et al. 2021, Table 2).
     salt_li6_ppm: float = None
+    # pebble central graphite core density in g/cm3; None keeps the template's 1.74 (v1). The gFHR
+    # benchmark uses 1.41 for buoyancy (Satvat et al. 2021 §2; INL/RPT-23-72727 Table 2).
+    pebble_core_density: float = None
     shared_graphite_sab: float = 900.0  # v1: one 'grph' therm at this T; None = per component
     sic_sab: str = "graphite"      # v1: 'graphite'; v2: 'sic'
 
@@ -250,6 +253,9 @@ def render_template(text, profile, conditions, registry, therm_marker="%%PEARLSI
             line = re.sub(r"tmp 900\b", f"tmp {format_temperature(temperature)}", line)
             if component == "salt" and conditions.salt_density is not None:
                 line = re.sub(rf"^mat {name} -\S+", f"mat {name} -{conditions.salt_density:.4f}", line)
+            if name == "pebgraph" and conditions.pebble_core_density is not None:
+                line = re.sub(r"^mat pebgraph(\s+)-\S+", lambda m: f"mat pebgraph{m.group(1)}"
+                              f"-{conditions.pebble_core_density:.4f}", line)
             if _MODER.search(line):
                 carbon = [za for za, _, _ in profile.map_za("6000")]
                 sep = _MODER.search(line).group(1)
@@ -281,6 +287,7 @@ def render_template(text, profile, conditions, registry, therm_marker="%%PEARLSI
 
 
 V1_FLIBE_LI6_PPM = 25.0  # core template: 0.00005 Li-6 per 2 Li
+V1_PEBBLE_CORE_DENSITY = 1.74  # core template pebgraph, g/cm3
 FLIBE_LI_PER_FORMULA = 2.0  # Li2BeF4: the template lists Li-7 + Li-6 = 2, Be 1, F 4 (atom ratios)
 
 

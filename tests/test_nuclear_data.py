@@ -116,6 +116,22 @@ def test_flibe_li6_setting_changes_only_the_lithium_lines(repo_root):
     assert thermal.core_conditions(280e6, 250_190).salt_li6_ppm == 50.0
 
 
+def test_pebble_core_density_setting_changes_only_pebgraph(repo_root):
+    """Benchmark pebble core 1.41 g/cm3 (Satvat 2021 §2; INL Table 2); the template has 1.74."""
+    with open(f"{repo_root}/gFHR_template.serpent") as f:
+        template = f.read()
+    v1, v2 = CoreConditions(), CoreConditions(pebble_core_density=1.41)
+    base = render_template(template, ENDF7_V1, v1, ThermRegistry(ENDF7_V1, v1), "MARK").split("\n")
+    fixed = render_template(template, ENDF7_V1, v2, ThermRegistry(ENDF7_V1, v2), "MARK").split("\n")
+    changed = [(a, b) for a, b in zip(base, fixed, strict=True) if a != b]
+    assert len(changed) == 1
+    assert changed[0][0].split()[:3] == ["mat", "pebgraph", "-1.74"]
+    assert changed[0][1].split()[:3] == ["mat", "pebgraph", "-1.4100"]
+    assert changed[0][0].split()[3:] == changed[0][1].split()[3:]
+    assert thermal.uncoupled_conditions().pebble_core_density == 1.41
+    assert thermal.core_conditions(280e6, 250_190).pebble_core_density == 1.41
+
+
 def render_v2(tmp_path, power=140e6, coupled=True):
     core = build_core(tmp_path / "case")
     for channel in core.zones:

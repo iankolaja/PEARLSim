@@ -48,6 +48,9 @@ class NuclearDataProfile:
     graphite_tables: tuple = ()
     sic_carbon_tables: tuple = ()
     sic_silicon_tables: tuple = ()
+    # S(a,b) tables with continuous secondary-energy distributions cannot be pre-interpolated with
+    # 'therm NAME T LIB1 LIB2'; 'thermstoch' mixes the two tables stochastically (docs/serpent cards_reference.md)
+    therm_card: str = "therm"
 
     def suffix(self, temperature):
         """Suffix of the library processed at the highest temperature not above ``temperature``.
@@ -86,7 +89,8 @@ ENDF8_LIB80X = NuclearDataProfile(
     name="endf8_lib80x",
     suffixes=((294, ".00c"), (600, ".01c"), (900, ".02c"), (1200, ".03c"), (2500, ".04c")),
     expansions={"6000": _NATURAL_CARBON},
-    renames={"95342": "95642", "95344": "95644"},
+    # isomers, Serpent-library to Lib80x (MCNP) IDs; Ag-110m and Pm-148m appear only after depletion
+    renames={"95342": "95642", "95344": "95644", "47310": "47510", "61348": "61548"},
     key_renames={"60130": "6013" + LIB},
     graphite_tables=tuple(zip((296, 400, 500, 600, 700, 800, 1000, 1200, 1600, 1999),
                               (f"grph30.4{i}t" for i in range(10)))),
@@ -94,6 +98,7 @@ ENDF8_LIB80X = NuclearDataProfile(
                                 (f"c-sic.4{i}t" for i in range(8)))),
     sic_silicon_tables=tuple(zip((300, 400, 500, 600, 700, 800, 1000, 1200),
                                  (f"si-sic.4{i}t" for i in range(8)))),
+    therm_card="thermstoch",  # Lib80x tables: "Unable to interpolate continuous-energy S(a,b) data" with therm
 )
 
 PROFILES = {p.name: p for p in (ENDF7_V1, ENDF8_LIB80X)}
@@ -146,24 +151,27 @@ class ThermRegistry:
         raise ValueError(f"{self.profile.name}: {family} S(a,b) tables do not bracket {temperature} K "
                          f"({tables[0][0]}-{tables[-1][0]} K)")
 
-    def _name(self, family, tables, component, temperature):
+    def _name(self, family, tables, component, temperature, za):
+        # Serpent links a therm name to one nuclide only ("S(a,b) library ... is already assigned to
+        # ZA = 6012"), so isotopic entries get one name each; natural elements (Z000) keep the v1 names.
+        isotope = "" if za.endswith("000") else f"_{za}"
         if family == "grph" and not self.conditions.per_component_sab:
-            name, temperature = "grph", self.conditions.shared_graphite_sab
+            name, temperature = f"grph{isotope}", self.conditions.shared_graphite_sab
         else:
-            name = f"{family}_{component}"
+            name = f"{family}_{component}{isotope}"
         if name not in self._cards:
             lo, hi = self._bracket(tables, temperature, family)
-            self._cards[name] = f"therm {name} {format_temperature(temperature)} {lo} {hi}"
+            self._cards[name] = f"{self.profile.therm_card} {name} {format_temperature(temperature)} {lo} {hi}"
         return name
 
-    def graphite(self, component, temperature):
-        return self._name("grph", self.profile.graphite_tables, component, temperature)
+    def graphite(self, component, temperature, za="6000"):
+        return self._name("grph", self.profile.graphite_tables, component, temperature, za)
 
-    def sic_carbon(self, component, temperature):
-        return self._name("csic", self.profile.sic_carbon_tables, component, temperature)
+    def sic_carbon(self, component, temperature, za):
+        return self._name("csic", self.profile.sic_carbon_tables, component, temperature, za)
 
-    def sic_silicon(self, component, temperature):
-        return self._name("sisic", self.profile.sic_silicon_tables, component, temperature)
+    def sic_silicon(self, component, temperature, za):
+        return self._name("sisic", self.profile.sic_silicon_tables, component, temperature, za)
 
     def moder_text(self, component, temperature, nuclides, sic=False, separator="  "):
         """``moder`` options for a carbon-bearing material (graphite or SiC).
@@ -177,14 +185,13 @@ class ThermRegistry:
         if sic and self.conditions.sic_sab == "sic":
             for za in nuclides:
                 if za.startswith("6"):
-                    parts.append(f"moder {self.sic_carbon(component, temperature)} {za}")
+                    parts.append(f"moder {self.sic_carbon(component, temperature, za)} {za}")
                 elif za.startswith("14"):
-                    parts.append(f"moder {self.sic_silicon(component, temperature)} {za}")
+                    parts.append(f"moder {self.sic_silicon(component, temperature, za)} {za}")
         else:
-            name = self.graphite(component, temperature)
             for za in nuclides:
                 if za.startswith("60"):
-                    parts.append(f"moder{separator}{name} {za}")
+                    parts.append(f"moder{separator}{self.graphite(component, temperature, za)} {za}")
         return " ".join(parts)
 
     def cards(self):
@@ -318,7 +325,7 @@ def validate_deck(text, profile):
     therm = {}
     for line in text.splitlines():
         tokens = line.split()
-        if tokens[:1] == ["therm"] and len(tokens) == 5:
+        if tokens[:1] in (["therm"], ["thermstoch"]) and len(tokens) == 5:
             therm[tokens[1]] = (float(tokens[2]), tokens[3], tokens[4])
     families = {}
     for tables in (profile.graphite_tables, profile.sic_carbon_tables, profile.sic_silicon_tables):
@@ -329,9 +336,14 @@ def validate_deck(text, profile):
             problems.append(f"therm {name}: tables {lo}, {hi} not in profile {profile.name}")
         elif not families[lo] <= t <= families[hi]:
             problems.append(f"therm {name}: {t} K outside [{families[lo]}, {families[hi]}]")
-    for name in set(re.findall(r"\bmoder\s+(\S+)\s+\d+", text)):
+    links = {}
+    for name, za in set(re.findall(r"\bmoder\s+(\S+)\s+(\d+)", text)):
+        links.setdefault(name, set()).add(za)
+    for name, zas in links.items():
         if name not in therm:
             problems.append(f"moder {name} has no therm card")
+        if len(zas) > 1:
+            problems.append(f"therm {name} linked to several nuclides {sorted(zas)} (Serpent allows one)")
     current, expected = None, None
     for number, line in enumerate(text.splitlines(), start=1):
         header = _MAT_HEADER.match(line)
@@ -361,6 +373,6 @@ def missing_library_entries(deck_text, xsdata_path):
     used = set(re.findall(r"^\s+(\d+\.\d\dc)\s", deck_text, re.M))
     for line in deck_text.splitlines():
         tokens = line.split()
-        if tokens[:1] == ["therm"] and len(tokens) == 5:
+        if tokens[:1] in (["therm"], ["thermstoch"]) and len(tokens) == 5:
             used.update(tokens[3:5])
     return sorted(used - available)

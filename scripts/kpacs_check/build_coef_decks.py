@@ -71,6 +71,67 @@ def cases(nominal):
     }
 
 
+def load_core(deck, step, out, pop):
+    """Replay RUN_DECK's setup lines in OUT_DIR and load the core at the end of STEP; return the Simulation."""
+    deck = os.path.abspath(deck)
+    run_dir = os.path.join(os.path.dirname(deck), os.path.splitext(os.path.basename(deck))[0])
+    out = os.path.abspath(out)
+    if os.path.dirname(out) != os.path.dirname(run_dir):
+        raise SystemExit("OUT_DIR must be a sibling of the run directory")
+    os.makedirs(out, exist_ok=True)
+    sim = Simulation("gFHR_equilibrium")
+    stem = f"{sim.simulation_name}_{step}.serpent"
+    for name in (f"zone_map{step}.json", f"{stem}.bumat1"):
+        link = os.path.join(out, name)
+        if not os.path.lexists(link):
+            os.symlink(os.path.join(run_dir, name), link)
+    # a copy, not a link: generate_input rewrites this file with the cases' own shuffle
+    pebbles = os.path.join(out, f"pebble_positions_{step}.csv")
+    if os.path.islink(pebbles):
+        os.remove(pebbles)
+    shutil.copyfile(os.path.join(run_dir, f"pebble_positions_{step}.csv"), pebbles)
+    os.chdir(out)
+    with open(deck) as f:
+        for line in f:
+            keyword = line.split("#", 1)[0].split()[:1]
+            if keyword and keyword[0] in ("initialize", "insertion"):
+                continue
+            sim.read_input_line(line)
+    sim.serpent_settings["pop"] = pop
+    sim.serpent_settings["seed"] = SEED
+    sim.load_from_step(step, 1)
+    sim.update_conditions()
+    return sim
+
+
+def write_case(sim, name, conditions, settings=None, shuffle_seed=SEED, pebble_file=None):
+    """Write <name>.serpent (transport only) for `conditions` with the core's current nuclear-data profile.
+
+    shuffle_seed seeds the pebble placement; pebble_file (default: the step's own name) holds it.
+    """
+    sim.core.conditions = conditions
+    generated = sim.core.generate_input(dict(settings or sim.serpent_settings), sim.burnup_time_step, 0,
+                                        cr_position=sim.rod_insertion, rng=np.random.default_rng(int(shuffle_seed)))
+    if pebble_file:
+        default = f"pebble_positions_{sim.core.iteration}.csv"
+        os.replace(default, pebble_file)
+        with open(generated) as f:
+            text = f.read().replace(f'"{default}"', f'"{pebble_file}"')
+        with open(generated, "w") as f:
+            f.write(text)
+    with open(generated) as f:
+        text = transport_only(f.read())
+    problems = validate_deck(text, sim.core.nuclear_data)
+    if problems:
+        raise SystemExit(f"{name}: {problems[:5]}")
+    with open(f"{name}.serpent", "w") as f:
+        f.write(text)
+    os.remove(generated)
+    with open("cases.tsv", "a") as table:
+        table.write(f"{name}\t{sim.core.nuclear_data.name}\t{conditions}\n")
+    print(name, sim.core.nuclear_data.name, conditions)
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("deck")
@@ -79,52 +140,11 @@ def main(argv=None):
     parser.add_argument("--pop", default="50000 75 15")
     parser.add_argument("--cases", nargs="*", help="only these cases (default: all)")
     args = parser.parse_args(argv)
-    deck = os.path.abspath(args.deck)
-    run_dir = os.path.join(os.path.dirname(deck), os.path.splitext(os.path.basename(deck))[0])
-    out = os.path.abspath(args.out)
-    if os.path.dirname(out) != os.path.dirname(run_dir):
-        raise SystemExit("OUT_DIR must be a sibling of the run directory")
-    os.makedirs(out, exist_ok=True)
-    sim = Simulation("gFHR_equilibrium")
-    stem = f"{sim.simulation_name}_{args.step}.serpent"
-    for name in (f"zone_map{args.step}.json", f"{stem}.bumat1"):
-        link = os.path.join(out, name)
-        if not os.path.lexists(link):
-            os.symlink(os.path.join(run_dir, name), link)
-    # a copy, not a link: generate_input rewrites this file with the cases' own shuffle
-    pebbles = os.path.join(out, f"pebble_positions_{args.step}.csv")
-    if os.path.islink(pebbles):
-        os.remove(pebbles)
-    shutil.copyfile(os.path.join(run_dir, f"pebble_positions_{args.step}.csv"), pebbles)
-    os.chdir(out)
-    with open(deck) as f:
-        for line in f:
-            keyword = line.split("#", 1)[0].split()[:1]
-            if keyword and keyword[0] in ("initialize", "insertion"):
-                continue
-            sim.read_input_line(line)
-    sim.serpent_settings["pop"] = args.pop
-    sim.serpent_settings["seed"] = SEED
-    sim.load_from_step(args.step, 1)
-    sim.update_conditions()
+    sim = load_core(args.deck, args.step, args.out, args.pop)
     nominal = replace(sim.core.conditions, shared_graphite_sab=None)
-    with open("cases.tsv", "a") as table:
-        for name, conditions in cases(nominal).items():
-            if args.cases and name not in args.cases:
-                continue
-            sim.core.conditions = conditions
-            generated = sim.core.generate_input(dict(sim.serpent_settings), sim.burnup_time_step, 0,
-                                                cr_position=sim.rod_insertion, rng=np.random.default_rng(int(SEED)))
-            with open(generated) as f:
-                text = transport_only(f.read())
-            problems = validate_deck(text, sim.core.nuclear_data)
-            if problems:
-                raise SystemExit(f"{name}: {problems[:5]}")
-            with open(f"{name}.serpent", "w") as f:
-                f.write(text)
-            os.remove(generated)
-            table.write(f"{name}\t{conditions}\n")
-            print(name, conditions)
+    for name, conditions in cases(nominal).items():
+        if not args.cases or name in args.cases:
+            write_case(sim, name, conditions)
 
 
 if __name__ == "__main__":

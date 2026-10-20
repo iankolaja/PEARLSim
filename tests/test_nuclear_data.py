@@ -42,13 +42,21 @@ def test_natural_carbon_expansion_conserves_atoms_and_mass():
     assert ENDF8_LIB80X.map_za("95342") == (("95642", 1.0, 1.0),)
 
 
+@pytest.mark.parametrize("serpent_za, lib80x_za", [("95342", "95642"), ("95344", "95644"),
+                                                   ("47310", "47510"), ("61348", "61548")])
+def test_isomers_get_lib80x_names(serpent_za, lib80x_za):
+    """Depleted compositions carry Ag-110m and Pm-148m too (found in the M2 reference decks)."""
+    assert ENDF8_LIB80X.map_za(serpent_za) == ((lib80x_za, 1.0, 1.0),)
+    assert ENDF7_V1.map_za(serpent_za) == ((serpent_za, 1.0, 1.0),)
+
+
 @pytest.mark.parametrize("temperature, low, high", [(872.5, "grph30.45t", "grph30.46t"),
                                                    (823.15, "grph30.45t", "grph30.46t"),
                                                    (700, "grph30.43t", "grph30.44t")])  # at a table temperature: lower pair
 def test_graphite_sab_brackets_temperature(temperature, low, high):
     registry = ThermRegistry(ENDF8_LIB80X, CoreConditions(shared_graphite_sab=None))
     name = registry.graphite("salt", temperature)
-    assert registry.cards() == f"therm {name} {temperature:g} {low} {high}"
+    assert registry.cards() == f"thermstoch {name} {temperature:g} {low} {high}"  # continuous-energy Lib80x tables
 
 
 def test_v1_uses_one_shared_graphite_table_at_900K():
@@ -180,10 +188,10 @@ def test_v2_deck_component_temperatures(tmp_path):
 def test_v2_sic_uses_sic_thermal_scattering(tmp_path):
     _, deck = render_v2(tmp_path)
     sic = next(l for l in deck.splitlines() if l.startswith("mat fuel20_R1Z1G1_SiC"))
-    assert "moder csic_coating 6012" in sic and "moder csic_coating 6013" in sic
-    assert "moder sisic_coating 14028" in sic and "grph" not in sic
+    assert "moder csic_coating_6012 6012" in sic and "moder csic_coating_6013 6013" in sic
+    assert "moder sisic_coating_14028 14028" in sic and "grph" not in sic
     pyc = next(l for l in deck.splitlines() if l.startswith("mat fuel20_R1Z1G1_PyC"))
-    assert "moder grph_coating 6012 moder grph_coating 6013" in pyc
+    assert "moder grph_coating_6012 6012 moder grph_coating_6013 6013" in pyc
 
 
 def test_v2_uncoupled_keeps_fixed_temperatures(tmp_path):
@@ -199,6 +207,13 @@ def test_validator_flags_inconsistencies():
     assert any("6012.01c" in p for p in problems)
     assert any("natural carbon" in p for p in problems)
     assert any("outside" in p for p in problems)
+
+
+def test_validator_flags_a_therm_name_shared_by_two_nuclides():
+    """Serpent stops with "S(a,b) library ... is already assigned to ZA = 6012" (M2 run, 2026-10-20)."""
+    deck = ("mat a -1.0 tmp 900 moder grph_x 6012 moder grph_x 6013\n  6012.02c   0.99\n  6013.02c   0.01\n\n"
+            "therm grph_x 900 grph30.45t grph30.46t\n")
+    assert any("several nuclides" in p for p in validate_deck(deck, ENDF8_LIB80X))
 
 
 ENDF8_XSDATA = "/global/scratch/users/ikolaja/PEARLSim_dev/xsdata/endf8_pearlsim.xsdata"

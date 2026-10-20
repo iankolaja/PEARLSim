@@ -130,6 +130,10 @@ class CoreConditions:
     pebble_core_density: float = None
     shared_graphite_sab: float = 900.0  # v1: one 'grph' therm at this T; None = per component
     sic_sab: str = "graphite"      # v1: 'graphite'; v2: 'sic'
+    # v2: one SiC/PyC/buffer/matrix material shared by every fuel material's TRISOs instead of a copy per
+    # fuel material (identical compositions and temperatures). Serpent builds an S(a,b) nuclide copy per
+    # material, which with Lib80x exceeded 128 GB for 1,280 copies (M2, 2026-10-20). v1 decks keep the copies.
+    shared_fuel_components: bool = False
 
     @property
     def per_component_sab(self):

@@ -166,19 +166,10 @@ class Material():
         input_s += render_concentrations(self.concentrations, profile, temperature)
         input_s += "\n"
 
-        if "fuel" in self.name:
-            for name in static_fuel_mats.keys():
-                other_mat = static_fuel_mats[name]
-                layer = "matrix" if name == "matrix" else "coating"
-                t_layer = layer_temperature(layer)
-                moder = registry.moder_text(layer, t_layer, mapped_carbon_silicon(other_mat.concentrations, profile),
-                                            sic=(name == "SiC"))
-                input_s += f"mat {self.name}_{name} {other_mat.density} rgb {rgb[0]} " \
-                           f"{rgb[1]} " \
-                           f"{rgb[2]} " \
-                           f"tmp {round(t_layer,3)} {moder}\n"
-                input_s += render_concentrations(other_mat.concentrations, profile, t_layer)
-                input_s += "\n"
+        shared = conditions is not None and conditions.shared_fuel_components
+        layers = SHARED_FUEL_COMPONENTS if shared else self.name
+        if "fuel" in self.name and not shared:
+            input_s += _component_materials(self.name, static_fuel_mats, profile, registry, layer_temperature, rgb)
 
         # Write geometry for solid graphite pebble
         if "graph" in self.name:
@@ -188,16 +179,42 @@ class Material():
         elif "fuel" in self.name:
             input_s += f"particle p{triso_counter}\n"
             input_s += f"{self.name}	0.02125\n"
-            input_s += f"{self.name}_buffer    0.031250\n"
-            input_s += f"{self.name}_PyC    0.035250\n"
-            input_s += f"{self.name}_SiC    0.038750\n"
-            input_s += f"{self.name}_PyC    0.042750\n"
-            input_s += f"{self.name}_matrix\n\n"
+            input_s += f"{layers}_buffer    0.031250\n"
+            input_s += f"{layers}_PyC    0.035250\n"
+            input_s += f"{layers}_SiC    0.038750\n"
+            input_s += f"{layers}_PyC    0.042750\n"
+            input_s += f"{layers}_matrix\n\n"
 
-            input_s += f"cell inf_{self.name} infU_{self.name} {self.name}_matrix -infinite\n"
+            input_s += f"cell inf_{self.name} infU_{self.name} {layers}_matrix -infinite\n"
             input_s += f"pbed trisobed{triso_counter} infU_{self.name} \"trisos/triso{triso_counter}\"\n"
             input_s += f"cell {self.name}_c1 u{self.name} pebgraph -pebble_core_outer\n"
             input_s += f"cell {self.name}_c2 u{self.name} fill trisobed{triso_counter} pebble_core_outer -matrix_outer\n"
             input_s += f"cell {self.name}_c3 u{self.name} pebshell  matrix_outer -pebble_outer\n"
         input_s += "\n\n"
         return input_s
+
+
+SHARED_FUEL_COMPONENTS = "fuelshared"
+
+
+def _component_materials(prefix, static_fuel_mats, profile, registry, layer_temperature, rgb):
+    """Coating and matrix material cards <prefix>_<SiC|PyC|buffer|matrix>."""
+    out = ""
+    for name, other_mat in static_fuel_mats.items():
+        layer = "matrix" if name == "matrix" else "coating"
+        t_layer = layer_temperature(layer)
+        moder = registry.moder_text(layer, t_layer, mapped_carbon_silicon(other_mat.concentrations, profile),
+                                    sic=(name == "SiC"))
+        out += f"mat {prefix}_{name} {other_mat.density} rgb {rgb[0]} {rgb[1]} {rgb[2]} tmp {round(t_layer,3)} {moder}\n"
+        out += render_concentrations(other_mat.concentrations, profile, t_layer)
+        out += "\n"
+    return out
+
+
+def shared_component_materials(static_fuel_mats, profile, conditions, registry):
+    """The one set of coating/matrix materials every fuel material uses when conditions.shared_fuel_components."""
+    def layer_temperature(layer):
+        return conditions.matrix if layer == "matrix" else conditions.coating
+    return _component_materials(SHARED_FUEL_COMPONENTS, static_fuel_mats, profile, registry, layer_temperature,
+                                (132, 235, 75))
+

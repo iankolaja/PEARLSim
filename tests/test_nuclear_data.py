@@ -174,8 +174,8 @@ def test_v2_deck_component_temperatures(tmp_path):
         return float(re.search(r"\btmp (\S+)", line).group(1))
 
     assert tmp_of("fuel20_R1Z1G1 ") == pytest.approx(c.kernel, abs=1e-3)
-    assert tmp_of("fuel20_R1Z1G1_SiC") == pytest.approx(c.coating, abs=1e-3)
-    assert tmp_of("fuel20_R1Z1G1_matrix") == pytest.approx(c.matrix, abs=1e-3)
+    assert tmp_of("fuelshared_SiC") == pytest.approx(c.coating, abs=1e-3)
+    assert tmp_of("fuelshared_matrix") == pytest.approx(c.matrix, abs=1e-3)
     assert tmp_of("graphpeb_R1Z1G1") == pytest.approx(c.dummy, abs=1e-3)
     assert tmp_of("FLiBe ") == pytest.approx(c.salt, abs=1e-3)
     assert tmp_of("reflectorS") == pytest.approx(c.reflector, abs=1e-3)
@@ -187,11 +187,23 @@ def test_v2_deck_component_temperatures(tmp_path):
 
 def test_v2_sic_uses_sic_thermal_scattering(tmp_path):
     _, deck = render_v2(tmp_path)
-    sic = next(l for l in deck.splitlines() if l.startswith("mat fuel20_R1Z1G1_SiC"))
+    sic = next(l for l in deck.splitlines() if l.startswith("mat fuelshared_SiC"))
     assert "moder csic_coating_6012 6012" in sic and "moder csic_coating_6013 6013" in sic
     assert "moder sisic_coating_14028 14028" in sic and "grph" not in sic
-    pyc = next(l for l in deck.splitlines() if l.startswith("mat fuel20_R1Z1G1_PyC"))
+    pyc = next(l for l in deck.splitlines() if l.startswith("mat fuelshared_PyC"))
     assert "moder grph_coating_6012 6012 moder grph_coating_6013 6013" in pyc
+
+
+def test_v2_fuel_materials_share_one_set_of_coating_and_matrix_materials(tmp_path):
+    """One S(a,b) nuclide copy per material: 1,280 component copies did not fit 128 GB with Lib80x (M2)."""
+    _, deck = render_v2(tmp_path)
+    components = re.findall(r"^mat (\S+_(?:SiC|PyC|buffer|matrix)) ", deck, re.M)
+    assert sorted(components) == ["fuelshared_PyC", "fuelshared_SiC", "fuelshared_buffer", "fuelshared_matrix"]
+    particles = re.findall(r"^particle p\d+\n(\S+)\s+0\.02125\n((?:.+\n)+?)\n", deck, re.M)
+    assert len(particles) > 1
+    for kernel, layers in particles:
+        assert kernel.startswith("fuel20_") and all(l.split()[0].startswith("fuelshared_") for l in layers.splitlines())
+    assert re.findall(r"^cell inf_\S+ infU_\S+ (\S+) -infinite", deck, re.M) == ["fuelshared_matrix"] * len(particles)
 
 
 def test_v2_uncoupled_keeps_fixed_temperatures(tmp_path):

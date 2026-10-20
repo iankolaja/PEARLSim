@@ -1,5 +1,5 @@
 from .zone import Zone, Out_Of_Core_Bin
-from .material import Material
+from .material import Material, shared_component_materials
 import numpy as np
 from copy import deepcopy
 import pandas as pd
@@ -528,6 +528,9 @@ class Core():
         input_str += f"pbed u_pb u_flibe \"{peb_file_name}\" \n"
 
         input_str += "\n\n%%%%%%%% Material and Pebble Definitions \n\n"
+        if self.conditions is not None and self.conditions.shared_fuel_components and self.static_fuel_materials:
+            input_str += shared_component_materials(self.static_fuel_materials, self.nuclear_data, self.conditions,
+                                                    registry)
         triso_counter = 1
         for material in self.materials.values():
             if self.is_nonzero_in_core(material.name):

@@ -59,7 +59,7 @@ def core_conditions(power, fuel_pebbles, nominal_power=NOMINAL_POWER, nominal_pe
         reflector=T_INLET + (T_REFLECTOR_NOMINAL - T_INLET) * x,
         structure=T_INLET,
         salt_density=salt_density(t_salt), salt_li6_ppm=li6_ppm, pebble_core_density=pebble_core_density,
-        shared_graphite_sab=None, sic_sab="sic",
+        shared_graphite_sab=None, sic_sab="sic", shared_fuel_components=True,
     )
 
 
@@ -70,4 +70,4 @@ def uncoupled_conditions(temperature=900.0, fuel_temperature=959.0, li6_ppm=FLIB
                           pebble_graphite=temperature, dummy=temperature, salt=temperature,
                           reflector=temperature, structure=temperature, salt_density=None,
                           salt_li6_ppm=li6_ppm, pebble_core_density=pebble_core_density,
-                          shared_graphite_sab=None, sic_sab="sic")
+                          shared_graphite_sab=None, sic_sab="sic", shared_fuel_components=True)

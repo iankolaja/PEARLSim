@@ -13,6 +13,14 @@ every case) and writes transport-only decks:
 d8_uncoupled - d7_v1 is the data-switch delta-k at a reference state (nuclear_data.md §7, due in M2);
 d8_hfp - d8_hzp is the power defect, to compare with the first-order estimate of about -660 pcm
 (dataset_v2_design.md §1a). The compositions are the v1-data equilibrium (fine for these differences).
+
+The v2 decks use `set opti 1` (no cross sections reconstructed on the unionised grid; docs/serpent
+official_rst user_guide/burnup_calculation.rst, optimisation modes) and --pop-v2 histories: with opti 2,
+Lib80x's 2.1 M-point unthinned grid (v1: 0.79 M) asked for 522 GB (job 40237562). opti changes memory and
+speed, not the physics; k is the analog estimate (ANA_KEFF) in both. Still > 92 GB in opti 1 (job 40237797), so
+the v2 decks also drop v1's `set nbuf 1000`: a particle buffer 1000x the batch, ~21 GB of MISC_MEMSIZE at pop
+10000 (Serpent's default buffer, used instead, is "somewhat conservative" in criticality mode; an undersized
+buffer stops the run with an error, it does not change results).
 """
 
 import argparse
@@ -33,6 +41,14 @@ ENDF8_SETTINGS = {
     "declib": f'"{ENDF8_DIR}/endf8.dec"',
     "nfylib": f'"{ENDF8_DIR}/endf8.nfy"',
 }
+
+
+def v2_settings(settings):
+    """Serpent settings for v2-data transport decks: Lib80x libraries, opti 1, Serpent's default nbuf."""
+    out = {k: v for k, v in settings.items() if k not in ("pdatadir", "nbuf")}
+    out.update(ENDF8_SETTINGS)
+    out["opti"] = "1"
+    return out
 
 
 def _endf_float(text):
@@ -84,12 +100,12 @@ def main(argv=None):
     parser.add_argument("step", type=int)
     parser.add_argument("out")
     parser.add_argument("--pop", default="10000 765 15")
+    parser.add_argument("--pop-v2", default="10000 390 15")
     args = parser.parse_args(argv)
     sim = load_core(args.deck, args.step, args.out, args.pop)
     write_case(sim, "d7_v1", sim.core.conditions)
     sim.core.nuclear_data = ENDF8_LIB80X
-    settings = {k: v for k, v in sim.serpent_settings.items() if k != "pdatadir"}
-    settings.update(ENDF8_SETTINGS)
+    settings = {**v2_settings(sim.serpent_settings), "pop": args.pop_v2}
     fuel, nominal = sim.fuel_pebbles_in_core(), len(sim.core.pebble_locations)
     write_case(sim, "d8_uncoupled", uncoupled_conditions(), settings)
     write_case(sim, "d8_hzp", core_conditions(0.0, fuel, nominal_pebbles=nominal), settings)

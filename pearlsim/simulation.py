@@ -414,6 +414,13 @@ class Simulation:
                 zone.initialize({"graphpeb": 1}, debug=self.debug)
         self.core.iteration = load_iteration
         self.core.load_zone_maps(f"zone_map{load_iteration}.json")
+        # graphite pebbles are not burnable, so not in the .bumat: recreate them (their composition never
+        # changes); fuel materials come from the .bumat below and stay an error if missing there
+        for channel in self.core.zones:
+            for zone in channel:
+                for name in zone.inventory:
+                    if "graph" in name and name not in self.core.materials:
+                        self.core.materials[name] = Material(name, self.core.fresh_pebbles[name.split("_")[0]])
         first = replicas.replica_ids(self.replicas)[0]
         self.core.load_pebble_locations(replicas.pebble_file(load_iteration, first), debug=self.debug)
         self.core.update_from_bumat(self.debug, iteration=load_iteration, step=burnup_step,

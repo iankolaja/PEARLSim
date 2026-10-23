@@ -205,3 +205,20 @@ def test_endf8_thermal_coupling_end_to_end(tmp_path, fake_serpent_command, monke
         # 1 MW of 280 MW: everything a little above the 823.15 K inlet; fuel hottest
         assert 823.15 < temps["salt"] < temps["matrix"] < temps["kernel"] < 900
         assert temps["structure"] == pytest.approx(823.15)
+
+
+@pytest.mark.e2e
+def test_load_from_step_restores_graphite_pebbles(tmp_path, fake_serpent_command, monkeypatch):
+    """Graphite pebbles are not in the .bumat; a restart must still define their materials (M2 pilot,
+    2026-10-22: "Universe ugraphpeb_R1Z1G1 is not defined")."""
+    _, run = run_case(tmp_path, fake_serpent_command, monkeypatch, num_steps=2)
+    monkeypatch.chdir(run)
+    sim = Simulation("synthetic")
+    for line in setup_lines():
+        sim.read_input_line(line)
+    sim.load_from_step(2, 1)
+    names = {name for channel in sim.core.zones for zone in channel for name, n in zone.inventory.items() if n}
+    assert any(name.startswith("graphpeb") for name in names)
+    assert names <= set(sim.core.materials)
+    deck = open(sim.core.generate_input({"pop": "100 10 5"}, STEP_DAYS, 0, cr_position=300)).read()
+    assert all(f"cell {name}_c u{name} {name} " in deck for name in names if name.startswith("graphpeb"))

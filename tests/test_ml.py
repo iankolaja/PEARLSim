@@ -158,3 +158,34 @@ def test_config_merge_replaces_data_mappings():
     assert cfg["targets"]["meshes"] == {} and cfg["targets"]["reactivity"] == "k"
     assert cfg["split"]["seed"] == 3 and cfg["split"]["folds"] == 5
     assert experiment.DEFAULTS["targets"]["meshes"] == {"power": 5, "flux": 5}  # defaults untouched
+
+
+def _controls(g, z):
+    return pd.DataFrame({"graphite_insertion_fraction": g, "control_rod_position": z})
+
+
+def test_rod_worth_feature_full_core_follows_s_curve():
+    from pearlsim.ml.features import rod_worth_feature
+    inserted, total = rod_worth_feature(_controls([0.0] * 4, [369.47, 60.0, 214.735, 1000.0]))
+    assert total == pytest.approx([3600.0] * 4)
+    assert inserted == pytest.approx([0.0, 3600.0, 1800.0, 0.0])  # out, in, half-way (S(0.5) = 0.5), above bed
+
+
+def test_rod_worth_feature_tracks_fuel_density_and_fill_front():
+    from pearlsim.ml.features import rod_worth_feature
+    g = [0.5] * 12
+    inserted, total = rod_worth_feature(_controls(g, [200.0] * 12), initial_front=0.0)
+    assert total == pytest.approx([2400.0] * 12)
+    # one zone per step from an all-graphite start: rods at 200 cm see no fuel until the front passes them
+    front_top = 60.0 + 309.47 * np.minimum(1.0, np.arange(1, 13) / 10)
+    assert np.all(inserted[front_top <= 200.0] == 0) and np.all(inserted[front_top > 200.0] > 0)
+    assert np.all(np.diff(inserted) >= 0)
+
+
+def test_rod_worth_feature_is_causal():
+    from pearlsim.ml.features import rod_worth_feature
+    rng = np.random.default_rng(3)
+    frame = _controls(rng.uniform(0, 1, 30), rng.uniform(60, 369.47, 30))
+    full, _ = rod_worth_feature(frame, initial_front=0.0)
+    head, _ = rod_worth_feature(frame.iloc[:17], initial_front=0.0)
+    assert full[:17] == pytest.approx(head)

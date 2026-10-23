@@ -375,6 +375,10 @@ class Simulation:
             return
         if serpent_flag not in (1, 2):
             raise ValueError(f"unknown Serpent flag {serpent_flag}")
+        printm = settings[ids[0]].get("printm", "").split()
+        if printm[:1] != ["1"]:
+            # without it Serpent depletes but writes no .bumat, and the step fails only after the run
+            raise DeckError("depletion steps need 'set printm 1 ...': PEARLSim reads compositions from the .bumat files")
         to_run = [r for r in ids if serpent_flag == 1 or not os.path.isfile(bumats[r])]
         for r in ids:
             if r not in to_run:

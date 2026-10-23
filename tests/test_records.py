@@ -132,7 +132,7 @@ def test_records_written_and_gathered_with_replicas(tmp_path, fake_serpent_comma
     write_core(tmp_path)
     lines = ["set_seed 7", "set_averaging_mode burnup", *setup_lines(), "initialize 0 graphpeb 1", "set_seed 7",
              "set_dataset_version v2-test", "set_discharge_threshold 18.63", "set_threshold_rel_std 0.02288",
-             "set_burnup_time_step 6.525", "set_power 1.0E+06", "set_rod_depth 300", "set pop 1000 10 5",
+             "set_burnup_time_step 6.525", "set_power 1.0E+06", "set_rod_depth 300", "set pop 1000 10 5", "set printm 1 1.0E-41",
              "set_replicas 2", "insertion 2 off 1 graphpeb 0.5 reinsert 1.0 fuel20 1.0"]
     (tmp_path / "case.inp").write_text("\n".join(lines) + "\n")
     monkeypatch.setenv("FAKE_SERPENT_SEED_NOISE", "1")

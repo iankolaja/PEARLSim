@@ -95,7 +95,7 @@ def deck(num_steps, num_replicas, serpent_flag=1):
     lines = ["set_seed 7", "set_averaging_mode burnup", *setup_lines(), "initialize 0 graphpeb 1",
              "set_seed 7", "set_discharge_threshold 18.63", "set_threshold_rel_std 0.02288",
              f"set_burnup_time_step {STEP_DAYS}", "set_power 1.0E+06", "set_rod_depth 300",
-             "set pop 1000 10 5"]
+             "set pop 1000 10 5", "set printm 1 1.0E-41"]
     if num_replicas:
         lines.append(f"set_replicas {num_replicas}")
     lines.append(f"insertion {num_steps} off {serpent_flag} graphpeb 0.5 reinsert 1.0 fuel20 1.0")

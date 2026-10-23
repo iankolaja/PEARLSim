@@ -25,7 +25,7 @@ def deck_lines(num_steps):
             "set_seed 7",  # initialize_pebbles consumes np.random even for 0 pebbles
             "set_discharge_threshold 18.63", "set_threshold_rel_std 0.02288",
             f"set_burnup_time_step {STEP_DAYS}", "set_power 1.0E+06", "set_rod_depth 300",
-            "set pop 1000 10 5",
+            "set pop 1000 10 5", "set printm 1 1.0E-41",
             f"insertion {num_steps} off 1 graphpeb 0.5 reinsert 1.0 fuel20 1.0"]
 
 
@@ -222,3 +222,17 @@ def test_load_from_step_restores_graphite_pebbles(tmp_path, fake_serpent_command
     assert names <= set(sim.core.materials)
     deck = open(sim.core.generate_input({"pop": "100 10 5"}, STEP_DAYS, 0, cr_position=300)).read()
     assert all(f"cell {name}_c u{name} {name} " in deck for name in names if name.startswith("graphpeb"))
+
+
+def test_depletion_step_without_printm_is_refused_before_serpent_runs(tmp_path, fake_serpent_command, monkeypatch):
+    """Without 'set printm 1' Serpent writes no .bumat; found by the real-Serpent tests (2026-10-23)."""
+    write_core(tmp_path)
+    lines = [line for line in deck_lines(1) if not line.startswith("set printm")]
+    (tmp_path / "case.inp").write_text("\n".join(lines) + "\n")
+    monkeypatch.setenv("FAKE_SERPENT_LOG", str(tmp_path / "serpent_log.jsonl"))
+    sim = Simulation("synthetic")
+    sim.serpent_command = fake_serpent_command
+    with pytest.raises(DeckError, match="printm"):
+        sim.read_input_file("case.inp", directory_name="run")
+    assert not (tmp_path / "serpent_log.jsonl").exists()
+

@@ -1,0 +1,23 @@
+#!/bin/sh
+# Real-Serpent integration tests (pytest marker "serpent", tests/test_serpent.py). Never on an interactive node.
+# Submit from the repository root:  sbatch slurm/test_serpent.sub
+# Each Serpent run takes a few minutes and ~20 GB (full gFHR core, small population); whole job ~30 min.
+#SBATCH --job-name=pearlsim_serpent_tests
+#SBATCH --output=slurm_test_serpent_%j.out
+#SBATCH --partition=savio3
+#SBATCH --time=02:00:00
+#SBATCH --nodes=1
+#SBATCH --ntasks-per-node=1
+#SBATCH --cpus-per-task=32
+#SBATCH --exclusive
+#SBATCH --qos=savio_lowprio
+#SBATCH -A co_nuclear
+#SBATCH --requeue
+
+module unload python gcc cmake
+module load cmake/3.27.7 gcc/11.4.0 openmpi/4.1.6 python/3.11.6-gcc-11.4.0
+export PATH=$PATH:/global/home/groups/co_nuclear/bin
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/global/home/groups/co_nuclear/gd_library/code/lib
+export PYTHONDONTWRITEBYTECODE=1 MPLBACKEND=Agg
+mkdir -p /global/scratch/users/ikolaja/PEARLSim_dev/runs/serpent_tests  # pytest makes --basetemp without parents
+~/envs/pearlsim/bin/python -m pytest -m serpent -v -p no:cacheprovider --basetemp=/global/scratch/users/ikolaja/PEARLSim_dev/runs/serpent_tests/$SLURM_JOB_ID tests/test_serpent.py

@@ -246,6 +246,7 @@ det core_56group_flux n
 dep daystep 6.525
 set pop 1000 10 5
 set power 1.0E+06
+set printm 1 1.0E-41
 set seed 1685127189
 
 

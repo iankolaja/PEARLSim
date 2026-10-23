@@ -7,6 +7,7 @@ ignored. Paths in a deck are relative to the directory containing the deck:
 handlers resolve input paths as ``"../" + path``.
 """
 
+import json
 import logging
 import os
 import pickle
@@ -21,7 +22,7 @@ from pearlsim import records, replicas
 from pearlsim.core import Core
 from pearlsim.material import Material
 from pearlsim.nuclear_data import ENDF7_V1, PROFILES, V1_FLIBE_LI6_PPM, V1_PEBBLE_CORE_DENSITY, CoreConditions
-from pearlsim.thermal import core_conditions, uncoupled_conditions
+from pearlsim.thermal import NOMINAL_PEBBLES, NOMINAL_POWER, core_conditions, uncoupled_conditions
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +57,13 @@ class Simulation:
         self.dataset_version = None  # recorded in every step record (set_dataset_version)
         self.flibe_li6_ppm = None  # set_flibe_li6_ppm; None: v1 template (25 ppm) unless v2 conditions apply
         self.pebble_core_density = None  # set_pebble_core_density; None: v1 template (1.74) unless v2 conditions
+        # set_k_target: feedback on the graphite insertion fraction (None: the deck's fractions are used)
+        self.k_target = None
+        self.k_gain, self.k_max_step, self.k_dither = 0.5, 0.05, 0.0
+        self.controlled_graphite = None
+        # set_power_per_pebble_cap: power is lowered so power per fuel pebble <= cap x nominal (None: no cap)
+        self.power_per_pebble_cap = None
+        self.requested_power = None
         self._provenance = None
 
     # ------------------------------------------------------------------ deck parsing
@@ -150,10 +158,45 @@ class Simulation:
         serpent_flag = int(args[2])
         insertion_ratios, insertion_dict = get_insertion_ratio_pairs(args[3:])
         for _ in range(num_steps):
+            graphite = insertion_dict.get("graphpeb", 0.0)
+            ratios = insertion_ratios
+            if self.k_target is not None:
+                graphite = self.controlled_graphite_fraction(graphite)
+                ratios = [(name, graphite if name == "graphpeb" else value) for name, value in insertion_ratios]
             self.core.rng = self.step_rng(self.core.iteration)
-            self.core.insert(insertion_ratios, self.fima_discharge_threshold,
+            self.core.insert(ratios, self.fima_discharge_threshold,
                              self.fima_discharge_rel_std, debug=self.debug)
-            self.run_step(serpent_flag, insertion_dict.get("graphpeb", 0.0))
+            self.apply_power_cap()
+            self.run_step(serpent_flag, graphite)
+
+    def controlled_graphite_fraction(self, deck_graphite):
+        """Graphite insertion fraction for this step from the previous step's end-of-step k (set_k_target).
+
+        g = g_prev + gain (k_prev - k_target), the change limited to max_step, plus N(0, dither) from the
+        per-step "control" stream (reproducible on restart), clipped to [0, 1]. Without a previous record
+        (first step) g_prev is kept. The deck's own fraction only seeds g_prev.
+        """
+        previous = self.controlled_graphite if self.controlled_graphite is not None else deck_graphite
+        target = previous
+        path = records.record_file(self.simulation_name, self.core.iteration - 1)
+        if os.path.exists(path):
+            with open(path) as f:
+                k_prev = json.load(f)["keff"]["eos"]["mean"]
+            change = self.k_gain * (k_prev - self.k_target)
+            target = previous + max(-self.k_max_step, min(self.k_max_step, change))
+        if self.k_dither:
+            target += self.step_rng(self.core.iteration, stream="control").normal(0.0, self.k_dither)
+        self.controlled_graphite = min(1.0, max(0.0, target))
+        return self.controlled_graphite
+
+    def apply_power_cap(self):
+        """Lower this step's power so power per fuel pebble <= cap x nominal (set_power_per_pebble_cap)."""
+        if self.power_per_pebble_cap is None:
+            return
+        requested = self.requested_power if self.requested_power is not None else float(self.power)
+        limit = self.power_per_pebble_cap * NOMINAL_POWER / NOMINAL_PEBBLES * self.fuel_pebbles_in_core()
+        self.power = min(requested, limit)
+        self.serpent_settings["power"] = f"{self.power:.6g}"
 
     def _kw_transport(self, args):
         serpent_flag = int(args[0])
@@ -198,7 +241,25 @@ class Simulation:
 
     def _kw_set_power(self, args):
         self.power = float(args[0])
+        self.requested_power = self.power
         self.serpent_settings["power"] = args[0]
+
+    def _kw_set_k_target(self, args):
+        """set_k_target <k> [gain G] [max_step D] [dither S] | off: feedback on the graphite insertion fraction."""
+        if args[0] == "off":
+            self.k_target = None
+            return
+        self.k_target = float(args[0])
+        for key, value in _pairs(args[1:]):
+            if key not in ("gain", "max_step", "dither"):
+                raise ValueError(f"unknown set_k_target option {key!r}")
+            setattr(self, f"k_{key}", float(value))
+
+    def _kw_set_power_per_pebble_cap(self, args):
+        """set_power_per_pebble_cap <multiple of nominal power per pebble> | off."""
+        self.power_per_pebble_cap = None if args[0] == "off" else float(args[0])
+        if self.power_per_pebble_cap is not None and self.power_per_pebble_cap <= 0:
+            raise ValueError("the power-per-pebble cap must be positive")
 
     _kw_power = _kw_set_power
 
@@ -257,10 +318,11 @@ class Simulation:
         self.serpent_settings[setting] = value
         if setting == "power":
             self.power = float(value)
+            self.requested_power = self.power
 
     # ------------------------------------------------------------------ steps
 
-    _STREAMS = {"shuffle": 0, "serpent": 1, "setup": 2}
+    _STREAMS = {"shuffle": 0, "serpent": 1, "setup": 2, "control": 3}
 
     def _seed_sequence(self, iteration, stream, replica=0):
         return np.random.SeedSequence([self.base_seed, iteration, replica, self._STREAMS[stream]])

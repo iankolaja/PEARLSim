@@ -236,3 +236,51 @@ def test_depletion_step_without_printm_is_refused_before_serpent_runs(tmp_path, 
         sim.read_input_file("case.inp", directory_name="run")
     assert not (tmp_path / "serpent_log.jsonl").exists()
 
+
+
+def _run_with(tmp_path, fake_serpent_command, monkeypatch, extra, num_steps=4, name="run"):
+    write_core(tmp_path)
+    lines = deck_lines(num_steps)
+    at = next(i for i, line in enumerate(lines) if line.startswith("insertion"))
+    (tmp_path / "case.inp").write_text("\n".join(lines[:at] + extra + lines[at:]) + "\n")
+    monkeypatch.setenv("FAKE_SERPENT_LOG", str(tmp_path / "serpent_log.jsonl"))
+    sim = Simulation("synthetic")
+    sim.serpent_command = fake_serpent_command
+    sim.cpu_cores = 2
+    sim.read_input_file("case.inp", directory_name=name)
+    return sim, tmp_path / name
+
+
+@pytest.mark.e2e
+def test_k_target_feedback_sets_the_graphite_fraction(tmp_path, fake_serpent_command, monkeypatch):
+    _, run = _run_with(tmp_path, fake_serpent_command, monkeypatch, ["set_k_target 1.0 gain 0.5 max_step 0.05"])
+    g = [json.loads((run / f"synthetic_operating_{s}.json").read_text())["graphite_insertion_fraction"]
+         for s in range(1, 5)]
+    k = [json.loads((run / f"synthetic_record_{s}.json").read_text())["keff"]["eos"]["mean"] for s in range(1, 5)]
+    assert g[0] == 0.5  # no previous step: the deck's fraction
+    for i in range(1, 4):
+        step = max(-0.05, min(0.05, 0.5 * (k[i - 1] - 1.0)))
+        assert g[i] == pytest.approx(min(1.0, max(0.0, g[i - 1] + step)))
+
+
+@pytest.mark.e2e
+def test_k_target_dither_is_reproducible(tmp_path, fake_serpent_command, monkeypatch):
+    extra = ["set_k_target 1.0 gain 0.0 dither 0.02"]
+    _, first = _run_with(tmp_path, fake_serpent_command, monkeypatch, extra, num_steps=3, name="a")
+    os.chdir(tmp_path)
+    _, second = _run_with(tmp_path, fake_serpent_command, monkeypatch, extra, num_steps=3, name="b")
+    ga = [json.loads((first / f"synthetic_operating_{s}.json").read_text())["graphite_insertion_fraction"]
+          for s in range(1, 4)]
+    gb = [json.loads((second / f"synthetic_operating_{s}.json").read_text())["graphite_insertion_fraction"]
+          for s in range(1, 4)]
+    assert ga == gb and len(set(ga)) == 3  # dithered, and the same on a rerun
+
+
+@pytest.mark.e2e
+def test_power_per_pebble_cap_lowers_power(tmp_path, fake_serpent_command, monkeypatch):
+    from pearlsim.thermal import NOMINAL_PEBBLES, NOMINAL_POWER
+    sim, run = _run_with(tmp_path, fake_serpent_command, monkeypatch, ["set_power_per_pebble_cap 1.0"], num_steps=1)
+    operating = json.loads((run / "synthetic_operating_1.json").read_text())
+    limit = NOMINAL_POWER / NOMINAL_PEBBLES * sim.fuel_pebbles_in_core()
+    assert operating["power"] == pytest.approx(min(1.0e6, limit))
+    assert f"set power {min(1.0e6, limit):.6g}\n" in (run / "synthetic_1.serpent").read_text()

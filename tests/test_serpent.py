@@ -94,7 +94,7 @@ def test_v2_depletion_step_and_restart(case):
     assert 0.9 < record["keff"]["bos"]["mean"] < 1.6
     restart = simulation()
     os.chdir(run)
-    for line in COMMON + V2_SETTINGS:
+    for line in COMMON + V2_SETTINGS + ["set_power 84e6"]:  # a burnup deck needs its power normalisation
         restart.read_input_line(line)
     restart.load_from_step(1, 1)
     restart.core.iteration = 2

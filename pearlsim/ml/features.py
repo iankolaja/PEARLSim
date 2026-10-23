@@ -45,39 +45,33 @@ def v1_power_per_fuel_pebble(frame, num_pebbles=V1_CORE_PEBBLES, residence_steps
 
 
 BED_BOTTOM, BED_HEIGHT = 60.0, 309.47  # cm, gFHR pebble bed (rod tip 369.47 = withdrawn, 60 = inserted)
-# Total rod worth (pcm) vs fuel density where there is fuel; M3 pilot (dataset_v2_design.md §1c), provisional
-ROD_WORTH_TOTAL_PCM = {0.5: 2400.0, 1.0: 3600.0}
+# Total rod worth in delta-k (k_out - k_in). M3 runs at 9 core states (fresh cores at 10-100% fuel density, run-in
+# and equilibrium; dataset_v2_design.md §1c): 0.035-0.044, fresh ~0.042, burned ~0.036, while the pcm worth
+# varies 2,100-4,900 mostly through 1/(k_in k_out).
+ROD_WORTH_TOTAL_DK = 0.039
 
 
-def rod_worth_feature(frame, total_by_density=None, steps_per_transit=10, initial_front=1.0):
-    """First-order rod worth from the control history (operator-observable), as a transformer input.
+def rod_worth_feature(frame, total_dk=ROD_WORTH_TOTAL_DK, steps_per_transit=10, initial_front=1.0):
+    """First-order rod worth (delta-k) from the control history (operator-observable), as a transformer input.
 
-    w(t) = W_tot(fuel density) x S(x), with S(x) = x - sin(2 pi x) / (2 pi) the textbook S-curve and x the
-    fraction of the fuelled bed height the rods reach from above:
-      - fuel density: mean fuel insertion fraction (1 - graphite_insertion_fraction) over the current and
-        previous ``steps_per_transit - 1`` steps (history before row 0 taken equal to row 0);
-      - fuel front: fraction of the bed height holding fuel; it starts at ``initial_front`` (1 = full core,
-        0 = all-graphite start) and rises one axial zone (1 / steps_per_transit) per step that inserts fuel.
-    The M3 pilot found W_tot follows the fuel density where there is fuel and the curve follows the fuel front;
-    S matches the full-core curves within ~0.1 W_tot. Returns (inserted worth, total worth) arrays in pcm.
+    dk(t) = total_dk x S(x), with S(x) = x - sin(2 pi x) / (2 pi) the textbook S-curve and x the fraction of
+    the fuelled bed height the rods reach from above. The fuel front (fraction of the bed height holding fuel)
+    starts at ``initial_front`` (1 = full core, 0 = all-graphite start) and rises one axial zone
+    (1 / steps_per_transit) per step that inserts fuel (graphite_insertion_fraction < 1).
+    In delta-k the rods are worth about the same in every state measured; converting to reactivity needs k
+    (rho worth = dk / (k_in k_out)), which the forecaster predicts. Returns the inserted delta-k per row.
     """
-    table = sorted((total_by_density or ROD_WORTH_TOTAL_PCM).items())
-    densities, totals = np.array([d for d, _ in table]), np.array([w for _, w in table])
     fuel = 1.0 - frame["graphite_insertion_fraction"].to_numpy(dtype=float)
-    padded = np.concatenate([np.full(steps_per_transit - 1, fuel[0]), fuel])
-    density = np.convolve(padded, np.ones(steps_per_transit) / steps_per_transit, mode="valid")
     front = np.empty_like(fuel)
     level = initial_front
     for i, f in enumerate(fuel):
         level = min(1.0, level + (1.0 / steps_per_transit if f > 0 else 0.0))
         front[i] = level
-    total = np.interp(density, densities, totals)  # held constant outside the table
     top = BED_BOTTOM + front * BED_HEIGHT
     z = frame["control_rod_position"].to_numpy(dtype=float)
     with np.errstate(invalid="ignore", divide="ignore"):
         x = np.clip(np.where(front > 0, (top - z) / (top - BED_BOTTOM), 0.0), 0.0, 1.0)
-    inserted = total * (x - np.sin(2 * np.pi * x) / (2 * np.pi))
-    return inserted, total
+    return total_dk * (x - np.sin(2 * np.pi * x) / (2 * np.pi))
 
 
 def reactivity(k):

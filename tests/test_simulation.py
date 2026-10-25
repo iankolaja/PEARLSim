@@ -284,3 +284,21 @@ def test_power_per_pebble_cap_lowers_power(tmp_path, fake_serpent_command, monke
     limit = NOMINAL_POWER / NOMINAL_PEBBLES * sim.fuel_pebbles_in_core()
     assert operating["power"] == pytest.approx(min(1.0e6, limit))
     assert f"set power {min(1.0e6, limit):.6g}\n" in (run / "synthetic_1.serpent").read_text()
+
+
+@pytest.mark.e2e
+def test_missing_triso_files_are_written_on_demand(tmp_path, fake_serpent_command, monkeypatch):
+    """A deck with more fuel materials than 'triso_file N' copies (family A2 stopped on triso401)."""
+    write_core(tmp_path)
+    lines = [line.replace("triso_file 4 ", "triso_file 1 ") for line in deck_lines(2)]
+    assert any(line.startswith("triso_file 1 ") for line in lines)
+    (tmp_path / "case.inp").write_text("\n".join(lines) + "\n")
+    monkeypatch.setenv("FAKE_SERPENT_LOG", str(tmp_path / "serpent_log.jsonl"))
+    sim = Simulation("synthetic")
+    sim.serpent_command = fake_serpent_command
+    sim.cpu_cores = 2
+    sim.read_input_file("case.inp", directory_name="run")
+    run = tmp_path / "run"
+    used = {int(i) for s in (1, 2) for i in re.findall(r'"trisos/triso(\d+)"', (run / f"synthetic_{s}.serpent").read_text())}
+    assert max(used) > 1 and all((run / "trisos" / f"triso{i}").exists() for i in used)
+    assert (run / "trisos" / f"triso{max(used)}").read_text().split("\n")[0].endswith(f"p{max(used)}")

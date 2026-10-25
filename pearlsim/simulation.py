@@ -12,6 +12,7 @@ import logging
 import os
 import pickle
 import random
+import re
 import shlex
 import subprocess
 
@@ -64,6 +65,7 @@ class Simulation:
         # set_power_per_pebble_cap: power is lowered so power per fuel pebble <= cap x nominal (None: no cap)
         self.power_per_pebble_cap = None
         self.requested_power = None
+        self.triso_source = None  # TRISO position file named by triso_file (more copies are written on demand)
         self._provenance = None
 
     # ------------------------------------------------------------------ deck parsing
@@ -111,12 +113,36 @@ class Simulation:
 
     def _kw_triso_file(self, args):
         num_copies, path = int(args[0]), args[1]
-        triso_data = pd.read_csv("../" + path, sep=" ", names=["x", "y", "z", "r", "id"])
+        self.triso_source = "../" + path
+        triso_data = pd.read_csv(self.triso_source, sep=" ", names=["x", "y", "z", "r", "id"])
         if not os.path.exists("trisos"):
             os.mkdir("trisos")
             for i in range(1, 1 + num_copies):
                 triso_data["id"] = f"p{i}"
                 triso_data.to_csv(f"trisos/triso{i}", sep=" ", header=False, index=False)
+
+    def ensure_triso_files(self, deck_names):
+        """Write any trisos/triso<i> a deck references but that does not exist yet.
+
+        Each fuel material needs its own TRISO position file. 'triso_file N' makes N up front, but burnup-group
+        discharge can create more fuel materials (up to zones x fuel groups); family A2 stopped at step 20 on
+        "trisos/triso401 does not exist" (2026-10-23).
+        """
+        needed = set()
+        for name in deck_names:
+            with open(name) as f:
+                needed.update(int(i) for i in re.findall(r'"trisos/triso(\d+)"', f.read()))
+        missing = sorted(i for i in needed if not os.path.exists(f"trisos/triso{i}"))
+        if not missing:
+            return
+        if self.triso_source is None:
+            raise DeckError(f"decks need trisos/triso{missing[0]} and no triso_file was given")
+        triso_data = pd.read_csv(self.triso_source, sep=" ", names=["x", "y", "z", "r", "id"])
+        os.makedirs("trisos", exist_ok=True)
+        for i in missing:
+            triso_data["id"] = f"p{i}"
+            triso_data.to_csv(f"trisos/triso{i}", sep=" ", header=False, index=False)
+        logger.info("Wrote %d more TRISO files (up to triso%d)", len(missing), missing[-1])
 
     def _kw_static_fuel_materials(self, args):
         for key, path in _pairs(args):
@@ -453,6 +479,7 @@ class Simulation:
                                               cr_position=self.rod_insertion, replica=r,
                                               rng=self.shuffle_rng(iteration, r))
                      for r in to_run]
+            self.ensure_triso_files(decks)
             self.run_serpent(decks)
             missing = [bumats[r] for r in to_run if not os.path.isfile(bumats[r])]
             if missing:

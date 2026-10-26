@@ -34,8 +34,10 @@ def test_tokens_pair_each_row_with_the_next_measurements():
     assert tokens.x[0].shape == (4, 3) and tokens.y[0].shape == (4, 2)
     assert np.allclose(tokens.x[0][2], frame.loc[2, ["d1", "d2", "u"]].to_numpy())
     assert np.allclose(tokens.y[0][2], frame.loc[3, ["d1", "d2"]].to_numpy())
-    scaler = TokenScaler.fit(tokens)
-    assert np.allclose(scaler.unscale_y(scaler.y(tokens.y[0])), tokens.y[0], atol=1e-6)
+    for delta in (True, False):
+        scaler = TokenScaler.fit(tokens, delta=delta)
+        scaled = scaler.y(tokens.y[0], tokens.x[0])
+        assert np.allclose(scaler.unscale_y(scaled, tokens.x[0]), tokens.y[0], atol=1e-5)
 
 
 @pytest.mark.torch

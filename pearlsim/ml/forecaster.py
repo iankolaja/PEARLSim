@@ -42,27 +42,44 @@ def make_tokens(sequences, obs_columns, control_columns):
 
 @dataclass
 class TokenScaler:
-    """Mean/std scaling fitted on training tokens (observables share their scale between x and y)."""
+    """Scaling fitted on training tokens. Inputs: mean/std per column. Targets: the change D_{i+1} - D_i
+    (``delta``, default), scaled by its own mean/std, so "no change" is the easy prediction; or D_{i+1} with the
+    observables' input scale."""
 
     mean: np.ndarray
     std: np.ndarray
+    y_mean: np.ndarray
+    y_std: np.ndarray
     n_obs: int
+    delta: bool = True
 
     @classmethod
-    def fit(cls, tokens):
+    def fit(cls, tokens, delta=True):
         x = np.concatenate(tokens.x)
         mean, std = x.mean(axis=0), x.std(axis=0)
         std = np.where(std > 0, std, 1.0)
-        return cls(mean.astype(np.float32), std.astype(np.float32), len(tokens.obs_columns))
+        n_obs = len(tokens.obs_columns)
+        if delta:
+            change = np.concatenate([y - xs[:, :n_obs] for xs, y in zip(tokens.x, tokens.y, strict=True)])
+            y_mean, y_std = change.mean(axis=0), change.std(axis=0)
+            y_std = np.where(y_std > 0, y_std, 1.0)
+        else:
+            y_mean, y_std = mean[:n_obs], std[:n_obs]
+        f32 = np.float32
+        return cls(mean.astype(f32), std.astype(f32), y_mean.astype(f32), y_std.astype(f32), n_obs, delta)
 
     def x(self, x):
         return (x - self.mean) / self.std
 
-    def y(self, y):
-        return (y - self.mean[: self.n_obs]) / self.std[: self.n_obs]
+    def y(self, y, x):
+        """Scaled target for next observables y given the (unscaled) tokens x."""
+        base = x[..., : self.n_obs] if self.delta else 0.0
+        return (y - base - self.y_mean) / self.y_std
 
-    def unscale_y(self, y):
-        return y * self.std[: self.n_obs] + self.mean[: self.n_obs]
+    def unscale_y(self, prediction, x):
+        """Next observables from a scaled prediction and the (unscaled) tokens x."""
+        base = x[..., : self.n_obs] if self.delta else 0.0
+        return base + prediction * self.y_std + self.y_mean
 
 
 def build_model(n_in, n_obs, d_model=64, heads=4, layers=3, max_len=512, dropout=0.1):
@@ -133,17 +150,20 @@ def _chunks(tokens, scaler, length, rng):
         start = rng.integers(0, max(1, len(xs) - length + 1))
         part = slice(start, start + length)
         n = len(xs[part])
-        x[b, :n], y[b, :n], valid[b, :n] = scaler.x(xs[part]), scaler.y(ys[part]), True
+        x[b, :n], y[b, :n], valid[b, :n] = scaler.x(xs[part]), scaler.y(ys[part], xs[part]), True
     return x, y, valid
 
 
-def fit(tokens, config=ForecasterConfig(), validation=None, noise_var=None, log=print):
-    """Train a phase-1 forecaster on TokenSet ``tokens``; returns (model, scaler, history)."""
+def fit(tokens, config=ForecasterConfig(), validation=None, noise_var=None, log=print, scaler=None):
+    """Train a phase-1 forecaster on TokenSet ``tokens``; returns (model, scaler, history).
+
+    noise_var: per-observable variance floor in the scaler's target units (``scaler.y_std``).
+    """
     import torch
 
     torch.manual_seed(config.seed)
     rng = np.random.default_rng(config.seed)
-    scaler = TokenScaler.fit(tokens)
+    scaler = scaler or TokenScaler.fit(tokens)
     n_in, n_obs = tokens.x[0].shape[1], tokens.y[0].shape[1]
     model = build_model(n_in, n_obs, config.d_model, config.heads, config.layers, max(config.chunk, 8),
                         config.dropout).to(config.device)
@@ -184,8 +204,9 @@ def evaluate_nll(model, scaler, tokens, config=ForecasterConfig(), noise_var=Non
     with torch.no_grad():
         for xs, ys in zip(tokens.x, tokens.y, strict=True):
             for start in range(0, len(xs), config.chunk):
-                x = torch.as_tensor(scaler.x(xs[start:start + config.chunk])[None], device=config.device)
-                y = torch.as_tensor(scaler.y(ys[start:start + config.chunk])[None], device=config.device)
+                part = slice(start, start + config.chunk)
+                x = torch.as_tensor(scaler.x(xs[part])[None], device=config.device)
+                y = torch.as_tensor(scaler.y(ys[part], xs[part])[None], device=config.device)
                 mean, log_var = model(x)
                 mask = torch.ones_like(y)
                 total += gaussian_nll(mean, log_var, y, mask, noise_var).item() * y.numel()
@@ -212,7 +233,7 @@ def rollout(model, scaler, context_obs, context_controls, future_controls, max_c
             t = len(obs)
             tokens = np.concatenate([np.stack(obs), np.stack(ctrl[:t])], axis=1)[-limit:]
             mean, _ = model(torch.as_tensor(scaler.x(tokens)[None]))
-            nxt = scaler.unscale_y(mean[0, -1].cpu().numpy())
+            nxt = scaler.unscale_y(mean[0, -1].cpu().numpy(), tokens[-1])
             out.append(nxt)
             obs.append(nxt.astype(np.float32))
     return np.stack(out)

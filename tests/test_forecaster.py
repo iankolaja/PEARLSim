@@ -22,7 +22,9 @@ def linear_sequences(n=40, length=60, seed=0):
         d[0] = rng.normal(0, 1, 2)
         for i in range(length - 1):
             d[i + 1] = a @ d[i] + b * u[i] + rng.normal(0, 0.01, 2)
-        frame = pd.DataFrame({"d1": d[:, 0], "d2": d[:, 1], "u": u})
+        # a "step" quantity of row i (like reactivity): depends on D_i and on the control u_i of that step
+        rho = 2.0 * d[:, 0] - 1.0 * d[:, 1] + 1.5 * u
+        frame = pd.DataFrame({"d1": d[:, 0], "d2": d[:, 1], "u": u, "rho": rho})
         sequences.append(Sequence(f"lin{s}", f"lin{s}", frame))
     return sequences, a, b
 
@@ -46,14 +48,15 @@ def test_model_is_causal():
 
     from pearlsim.ml.forecaster import build_model
     torch.manual_seed(0)
-    model = build_model(3, 2, d_model=16, heads=2, layers=2, max_len=32, dropout=0.0).eval()
+    model = build_model(3, 2, n_step=1, d_model=16, heads=2, layers=2, max_len=32, dropout=0.0).eval()
     x = torch.randn(1, 20, 3)
     changed = x.clone()
     changed[0, 12:] += 5.0
     with torch.no_grad():
-        a, _ = model(x)
-        b, _ = model(changed)
-    assert torch.allclose(a[0, :12], b[0, :12], atol=1e-5) and not torch.allclose(a[0, 12:], b[0, 12:])
+        a, b = model(x), model(changed)
+    for key in ("obs_mean", "step_mean"):
+        assert torch.allclose(a[key][0, :12], b[key][0, :12], atol=1e-5)
+        assert not torch.allclose(a[key][0, 12:], b[key][0, 12:])
 
 
 @pytest.mark.torch
@@ -64,7 +67,7 @@ def test_learns_a_linear_system_and_rolls_out():
     cfg = ForecasterConfig(chunk=32, batch_size=16, epochs=25, d_model=32, heads=2, layers=2, dropout=0.0, lr=3e-3)
     tokens = make_tokens(train, OBS, CTRL)
     model, scaler, history = fit(tokens, cfg, validation=make_tokens(test, OBS, CTRL), log=lambda e: None)
-    assert history[-1]["validation_nll"] < history[0]["validation_nll"]
+    assert history[-1]["validation_obs_nll"] < history[0]["validation_obs_nll"]
     frame = test[0].frame
     d, u = frame[OBS].to_numpy(), frame[CTRL].to_numpy()
     pred = rollout(model, scaler, d[:20], u[:20], u[20:30])
@@ -75,3 +78,32 @@ def test_learns_a_linear_system_and_rolls_out():
     scale = d.std(axis=0)
     assert np.abs(pred[0] - truth[0]).max() < 0.2 * scale.max()   # one step
     assert np.abs(pred - truth).mean() < 0.3 * scale.max()          # ten-step rollout stays on track
+
+
+@pytest.mark.torch
+def test_phase2_modes_learn_the_step_target():
+    import torch
+
+    from pearlsim.ml.forecaster import ForecasterConfig, evaluate, fit, rollout
+    train, _, _ = linear_sequences(n=60, seed=1)
+    test, _, _ = linear_sequences(n=5, seed=2)
+    small = dict(chunk=32, batch_size=16, d_model=32, heads=2, layers=2, dropout=0.0, lr=3e-3)
+    base, _, _ = fit(make_tokens(train, OBS, CTRL), ForecasterConfig(epochs=10, **small), log=lambda e: None)
+    tokens, held = make_tokens(train, OBS, CTRL, ["rho"]), make_tokens(test, OBS, CTRL, ["rho"])
+    init = base.state_dict()
+    results = {}
+    for mode in ("joint", "probe", "finetune"):
+        model, scaler, _ = fit(tokens, ForecasterConfig(epochs=15, mode=mode, **small), log=lambda e: None,
+                               init=None if mode == "joint" else init)
+        results[mode] = evaluate(model, scaler, held, ForecasterConfig(**small))["step_nll"]
+        if mode == "probe":  # the phase-1 trunk is unchanged
+            assert all(torch.equal(p, init[name]) for name, p in model.state_dict().items() if name in init)
+    assert all(v < 0.0 for v in results.values()), results  # well below a unit-variance guess (NLL ~1.42)
+    frame = test[0].frame
+    d, u = frame[OBS].to_numpy(), frame[CTRL].to_numpy()
+    obs, steps = rollout(model, scaler, d[:20], u[:20], u[20:25], with_steps=True)
+    assert obs.shape == (6, 2) and steps.shape == (6, 1)
+    assert abs(steps[0, 0] - frame["rho"].iloc[19]) < 0.3 * frame["rho"].std()  # horizon 0: the decision step
+    with pytest.raises(ValueError, match="phase-1 state"):
+        fit(tokens, ForecasterConfig(epochs=1, mode="probe", **small), log=lambda e: None, init=None)
+

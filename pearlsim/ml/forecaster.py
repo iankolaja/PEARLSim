@@ -178,6 +178,7 @@ class ForecasterConfig:
     device: str = "cpu"
     mode: str = "pretrain"     # pretrain (phase 1) | joint | probe | finetune (phase 2)
     aux_weight: float = 0.3    # phase 2: weight of the next-observable loss next to the step loss
+    keep_best: bool = True     # with validation data, return the weights of the best validation epoch
 
     def __post_init__(self):
         if self.mode not in ("pretrain", "joint", "probe", "finetune"):
@@ -246,6 +247,7 @@ def fit(tokens, config=ForecasterConfig(), validation=None, noise_var=None, log=
     floor = None if noise_var is None else torch.as_tensor(noise_var, dtype=torch.float32, device=config.device)
     steps_per_epoch = max(1, sum(len(x) for x in tokens.x) // (config.chunk * config.batch_size))
     history = []
+    best_score, best_state = np.inf, None
     for epoch in range(config.epochs):
         model.train()
         parts = []
@@ -261,8 +263,15 @@ def fit(tokens, config=ForecasterConfig(), validation=None, noise_var=None, log=
         entry = {"epoch": epoch, **{f"train_{k}": float(np.mean([p[k] for p in parts])) for k in parts[0]}}
         if validation is not None:
             entry.update({f"validation_{k}": v for k, v in evaluate(model, scaler, validation, config, floor).items()})
+            score = entry["validation_obs_nll" if config.mode == "pretrain" else "validation_step_nll"]
+            if config.keep_best and score < best_score:
+                best_score = score
+                best_state = {k: v.detach().clone() for k, v in model.state_dict().items()}
+                entry["best"] = True
         history.append(entry)
         log(entry)
+    if best_state is not None:
+        model.load_state_dict(best_state)
     return model, scaler, history
 
 

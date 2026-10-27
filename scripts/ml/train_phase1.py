@@ -93,8 +93,8 @@ def main(argv=None):
                             "test": int(sum(len(x) for x in test_tokens.x))}}
     with open(os.path.join(args.out, "results.json"), "w") as f:
         json.dump(results, f, indent=1)
-    torch.save({"state_dict": model.state_dict(), "mean": scaler.mean, "std": scaler.std, "obs": obs, "ctrl": ctrl,
-                "config": asdict(config)}, os.path.join(args.out, "model.pt"))
+    torch.save({"state_dict": model.state_dict(), "mean": scaler.mean, "std": scaler.std, "scaler": asdict(scaler),
+                "obs": obs, "ctrl": ctrl, "config": asdict(config)}, os.path.join(args.out, "model.pt"))
     print("test NLL", test_nll)
     for h in (0, 1, 5, 10, args.horizon):
         if h < len(model_err):

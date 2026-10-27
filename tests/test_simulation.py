@@ -302,3 +302,18 @@ def test_missing_triso_files_are_written_on_demand(tmp_path, fake_serpent_comman
     used = {int(i) for s in (1, 2) for i in re.findall(r'"trisos/triso(\d+)"', (run / f"synthetic_{s}.serpent").read_text())}
     assert max(used) > 1 and all((run / "trisos" / f"triso{i}").exists() for i in used)
     assert (run / "trisos" / f"triso{max(used)}").read_text().split("\n")[0].endswith(f"p{max(used)}")
+
+
+@pytest.mark.e2e
+def test_k_target_mix_mode_inserts_the_core_mix_plus_a_correction(tmp_path, fake_serpent_command, monkeypatch):
+    sim, run = _run_with(tmp_path, fake_serpent_command, monkeypatch,
+                         ["set_k_target 1.0 mode mix sensitivity 2.0 max_step 0.1"], num_steps=3)
+    k1 = json.loads((run / "synthetic_record_1.json").read_text())["keff"]["eos"]["mean"]
+    zone_map = json.loads((run / "zone_map1.json").read_text())
+    fuel = sum(n for zone in zone_map.values() for name, n in zone.items() if name.startswith("fuel"))
+    core_fuel = fuel / len(sim.core.pebble_locations)
+    g2 = json.loads((run / "synthetic_operating_2.json").read_text())["graphite_insertion_fraction"]
+    correction = max(-0.1, min(0.1, (1.0 - k1) / 2.0))
+    assert g2 == pytest.approx(min(1.0, max(0.0, 1.0 - (core_fuel + correction))))
+    with pytest.raises(DeckError):
+        sim.read_input_line("set_k_target 1.0 mode wild")

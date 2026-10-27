@@ -61,6 +61,7 @@ class Simulation:
         # set_k_target: feedback on the graphite insertion fraction (None: the deck's fractions are used)
         self.k_target = None
         self.k_gain, self.k_max_step, self.k_dither = 0.5, 0.05, 0.0
+        self.k_mode, self.k_sensitivity = "increment", 2.0
         self.controlled_graphite = None
         # set_power_per_pebble_cap: power is lowered so power per fuel pebble <= cap x nominal (None: no cap)
         self.power_per_pebble_cap = None
@@ -198,9 +199,14 @@ class Simulation:
     def controlled_graphite_fraction(self, deck_graphite):
         """Graphite insertion fraction for this step from the previous step's end-of-step k (set_k_target).
 
-        g = g_prev + gain (k_prev - k_target), the change limited to max_step, plus N(0, dither) from the
-        per-step "control" stream (reproducible on restart), clipped to [0, 1]. Without a previous record
-        (first step) g_prev is kept. The deck's own fraction only seeds g_prev.
+        mode increment: g = g_prev + gain (k_prev - k_target), the change limited to max_step. This integrates
+          on top of the ~one-transit lag between insertion and core, and oscillated in family A1 (2026-10-27).
+        mode mix: the inserted fuel fraction is the core's current fuel fraction (fuel bookkeeping, known to an
+          operator) plus (k_target - k_prev) / sensitivity, the correction limited to max_step; the core
+          inventory itself integrates, with the transit as its time constant. sensitivity ~ dk per unit core
+          fuel fraction (~2 for fresh cores near critical, M3).
+        Both add N(0, dither) from the per-step "control" stream (reproducible on restart) and clip to [0, 1].
+        Without a previous record (first step) the previous / deck fraction is kept.
         """
         previous = self.controlled_graphite if self.controlled_graphite is not None else deck_graphite
         target = previous
@@ -208,8 +214,13 @@ class Simulation:
         if os.path.exists(path):
             with open(path) as f:
                 k_prev = json.load(f)["keff"]["eos"]["mean"]
-            change = self.k_gain * (k_prev - self.k_target)
-            target = previous + max(-self.k_max_step, min(self.k_max_step, change))
+            if self.k_mode == "mix":
+                core_fuel = self.fuel_pebbles_in_core() / len(self.core.pebble_locations)
+                correction = (self.k_target - k_prev) / self.k_sensitivity
+                target = 1.0 - (core_fuel + max(-self.k_max_step, min(self.k_max_step, correction)))
+            else:
+                change = self.k_gain * (k_prev - self.k_target)
+                target = previous + max(-self.k_max_step, min(self.k_max_step, change))
         if self.k_dither:
             target += self.step_rng(self.core.iteration, stream="control").normal(0.0, self.k_dither)
         self.controlled_graphite = min(1.0, max(0.0, target))
@@ -271,15 +282,21 @@ class Simulation:
         self.serpent_settings["power"] = args[0]
 
     def _kw_set_k_target(self, args):
-        """set_k_target <k> [gain G] [max_step D] [dither S] | off: feedback on the graphite insertion fraction."""
+        """set_k_target <k> [mode increment|mix] [gain G] [sensitivity S] [max_step D] [dither S] | off:
+        feedback on the graphite insertion fraction (see controlled_graphite_fraction)."""
         if args[0] == "off":
             self.k_target = None
             return
         self.k_target = float(args[0])
         for key, value in _pairs(args[1:]):
-            if key not in ("gain", "max_step", "dither"):
+            if key == "mode":
+                if value not in ("increment", "mix"):
+                    raise ValueError(f"set_k_target mode must be 'increment' or 'mix', not {value!r}")
+                self.k_mode = value
+            elif key in ("gain", "sensitivity", "max_step", "dither"):
+                setattr(self, f"k_{key}", float(value))
+            else:
                 raise ValueError(f"unknown set_k_target option {key!r}")
-            setattr(self, f"k_{key}", float(value))
 
     def _kw_set_power_per_pebble_cap(self, args):
         """set_power_per_pebble_cap <multiple of nominal power per pebble> | off."""

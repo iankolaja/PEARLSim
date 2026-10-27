@@ -73,6 +73,8 @@ def main(argv=None):
     parser.add_argument("--phase1", required=True)
     parser.add_argument("--modes", nargs="+", default=["joint", "probe", "finetune"])
     parser.add_argument("--data", default="PEARLSim/sequence_data")
+    parser.add_argument("--config", help="experiment YAML whose split (fixed test families) to use, e.g. "
+                                         "PEARLSim/experiments/v1_lstm.yaml, so results compare with its baselines")
     parser.add_argument("--epochs", type=int, default=300)
     parser.add_argument("--device", default="cpu")
     parser.add_argument("--context", type=int, default=32)
@@ -83,7 +85,10 @@ def main(argv=None):
 
     phase1 = torch.load(args.phase1, weights_only=False)
     p1 = phase1["config"]
-    cfg = experiment.merge(experiment.DEFAULTS, {"data": {"path": args.data}})
+    override = {"data": {"path": args.data}}
+    if args.config:
+        override["split"] = experiment.load_config(args.config)["split"]
+    cfg = experiment.merge(experiment.DEFAULTS, override)
     sequences = with_reactivity(experiment.load_sequences(cfg))
     fit_fams, val_fams, test_fams = experiment.split_families(cfg, sequences)
     pick = lambda fams: [s for s in sequences if s.family in fams]  # noqa: E731

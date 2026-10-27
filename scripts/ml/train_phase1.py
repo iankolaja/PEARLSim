@@ -48,6 +48,8 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("out")
     parser.add_argument("--data", default="PEARLSim/sequence_data")
+    parser.add_argument("--config", help="experiment YAML whose split (fixed test families) to use, e.g. "
+                                         "PEARLSim/experiments/v1_lstm.yaml, so results compare with its baselines")
     parser.add_argument("--epochs", type=int, default=60)
     parser.add_argument("--chunk", type=int, default=64)
     parser.add_argument("--layers", type=int, default=3)
@@ -59,7 +61,10 @@ def main(argv=None):
     parser.add_argument("--seed", type=int, default=0)
     args = parser.parse_args(argv)
     os.makedirs(args.out, exist_ok=True)
-    cfg = experiment.merge(experiment.DEFAULTS, {"data": {"path": args.data}})
+    override = {"data": {"path": args.data}}
+    if args.config:
+        override["split"] = experiment.load_config(args.config)["split"]
+    cfg = experiment.merge(experiment.DEFAULTS, override)
     sequences = experiment.load_sequences(cfg)
     fit_fams, val_fams, test_fams = experiment.split_families(cfg, sequences)
     pick = lambda fams: [s for s in sequences if s.family in fams]  # noqa: E731

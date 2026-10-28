@@ -336,3 +336,10 @@ def test_reused_step_records_the_settings_it_ran_with(tmp_path, fake_serpent_com
         sim.read_input_file("case.inp", directory_name="run")
     record = json.loads((tmp_path / "run" / "synthetic_record_1.json").read_text())
     assert record["provenance"]["serpent_settings"]["pop"] == "1000 10 5"
+
+
+def test_acelib_override_points_decks_at_a_staged_index(sim, monkeypatch):
+    sim.read_input_line('set acelib "/shared/endf8.xsdata"')
+    assert sim.serpent_settings_for_step(1)["acelib"] == '"/shared/endf8.xsdata"'
+    monkeypatch.setenv("PEARLSIM_ACELIB", "/tmp/xs/endf8.xsdata")
+    assert sim.serpent_settings_for_step(1)["acelib"] == '"/tmp/xs/endf8.xsdata"'

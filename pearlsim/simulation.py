@@ -387,6 +387,9 @@ class Simulation:
         With set_seed and no explicit 'set seed', each step gets its own Serpent seed.
         """
         settings = dict(self.serpent_settings)
+        if os.environ.get("PEARLSIM_ACELIB"):
+            # a job-local copy of the cross-section index and files (scripts/stage_xsdata.py); same data
+            settings["acelib"] = f'"{os.environ["PEARLSIM_ACELIB"]}"'
         if self.base_seed is not None and "seed" not in settings:
             seed = int(self._seed_sequence(iteration, "serpent", replica).generate_state(1)[0] % (2**31 - 1)) + 1
             settings["seed"] = str(seed)
@@ -561,10 +564,13 @@ class Simulation:
         commands = [self.serpent_command_line(name, threads) for name in input_names]
         if concurrent:
             processes = []
-            for name, command in zip(input_names, commands):
-                logger.info("Starting %s", " ".join(command))
+            blocks = _core_blocks(len(input_names))
+            for name, command, cores in zip(input_names, commands, blocks, strict=True):
+                logger.info("Starting %s on %d cores", " ".join(command), len(cores) if cores else threads)
                 with open(f"{name}.log", "w") as log:
-                    processes.append(subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT))
+                    # each replica on its own cores: unpinned, one of three replicas once ran 10x slower
+                    pin = (lambda c=cores: os.sched_setaffinity(0, c)) if cores else None
+                    processes.append(subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT, preexec_fn=pin))
             codes = [process.wait() for process in processes]
         else:
             codes = []
@@ -575,6 +581,18 @@ class Simulation:
                   for command, code in zip(commands, codes) if code != 0]
         if failed:
             raise SerpentError("; ".join(failed))
+
+
+def _core_blocks(n):
+    """Split this process's CPUs into n contiguous blocks (None each if affinity is unavailable or too few CPUs)."""
+    try:
+        cpus = sorted(os.sched_getaffinity(0))
+    except AttributeError:
+        return [None] * n
+    if len(cpus) < n:
+        return [None] * n
+    size = len(cpus) // n
+    return [set(cpus[i * size:(i + 1) * size]) for i in range(n)]
 
 
 def _deck_settings(deck, fallback):

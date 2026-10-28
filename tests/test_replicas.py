@@ -140,6 +140,8 @@ def test_two_replicas_end_to_end(tmp_path, fake_serpent_command, monkeypatch):
     assert [e["argv"] for e in log[:2]] in ([[f"synthetic_1_r{r}.serpent", "-omp", "1"] for r in (0, 1)],
                                             [[f"synthetic_1_r{r}.serpent", "-omp", "1"] for r in (1, 0)])
     assert max(e["start"] for e in log[:2]) < min(e["end"] for e in log[:2])  # ran concurrently
+    if len(os.sched_getaffinity(0)) >= 2:  # concurrent replicas are pinned to separate cores
+        assert not set(log[0]["cpus"]) & set(log[1]["cpus"])
     assert len(log) == 6
 
     # replica 0 reproduces the single-replica step 1 deck; replica 1 is a different shuffle and seed

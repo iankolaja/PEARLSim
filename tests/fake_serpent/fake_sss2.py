@@ -102,7 +102,8 @@ def main(argv):
         with open(log, "a") as f:
             f.write(json.dumps({"argv": argv[1:], "cwd": os.getcwd(), "mode": mode,
                                 "burnable_materials": len(order), "daysteps": daysteps,
-                                "start": start, "end": time.time()}) + "\n")
+                                "start": start, "end": time.time(),
+                                "cpus": sorted(os.sched_getaffinity(0))}) + "\n")
     if mode == "fail":
         return 1
     if mode == "no_output":

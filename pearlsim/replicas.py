@@ -91,21 +91,24 @@ def average_compositions(replica_materials):
 
 
 def _material_spread(values, mean):
-    """Relative sample standard deviation over replicas, for key nuclides and the largest one."""
-    total = sum(mean.values())
-    summary = {}
-    worst, worst_nuclide = 0.0, None
-    for nuclide, v in values.items():
-        m = mean[nuclide]
-        if m <= 0:
-            continue
-        rel = float(np.std(v, ddof=1) / m)
-        if nuclide in SPREAD_NUCLIDES:
-            summary[nuclide] = rel
-        if m >= SPREAD_MIN_FRACTION * total and rel > worst:
-            worst, worst_nuclide = rel, nuclide
-    summary["max"] = worst
-    summary["max_nuclide"] = worst_nuclide
+    """Relative sample standard deviation over replicas, for key nuclides and the largest one.
+
+    Vectorised over nuclides (one std per nuclide used to cost ~100,000 NumPy calls per step).
+    """
+    nuclides = list(values)
+    v = np.array([values[nuc] for nuc in nuclides], dtype=float)  # (nuclides, replicas)
+    m = np.array([mean[nuc] for nuc in nuclides], dtype=float)
+    positive = m > 0
+    rel = np.zeros_like(m)
+    rel[positive] = v[positive].std(axis=1, ddof=1) / m[positive]
+    summary = {nuc: float(rel[i]) for i, nuc in enumerate(nuclides) if nuc in SPREAD_NUCLIDES and positive[i]}
+    eligible = positive & (m >= SPREAD_MIN_FRACTION * m.sum())
+    candidates = np.where(eligible, rel, -1.0)
+    best = int(np.argmax(candidates)) if len(candidates) else -1
+    if best >= 0 and candidates[best] > 0.0:
+        summary["max"], summary["max_nuclide"] = float(candidates[best]), nuclides[best]
+    else:
+        summary["max"], summary["max_nuclide"] = 0.0, None
     return summary
 
 

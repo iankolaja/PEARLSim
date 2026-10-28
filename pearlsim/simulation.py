@@ -508,8 +508,11 @@ class Simulation:
             replicas.write_spread(f"{self.simulation_name}_replica_spread_{iteration}.json", spread)
         self.days += self.burnup_time_step
         self.core.iteration += 1
+        # a reused step keeps the settings it ran with (its deck), not the current ones (e.g. a changed 'set pop')
+        ran_with = settings[ids[0]] if ids[0] in to_run else _deck_settings(
+            replicas.stem(self.simulation_name, iteration, ids[0]), settings[ids[0]])
         records.write_record(".", self.simulation_name, iteration, num_replicas=self.replicas, days=self.days,
-                             provenance=self.provenance(settings[ids[0]]))
+                             provenance=self.provenance(ran_with))
 
     def provenance(self, settings):
         """Run provenance for step records (code version is looked up once per simulation)."""
@@ -572,6 +575,20 @@ class Simulation:
                   for command, code in zip(commands, codes) if code != 0]
         if failed:
             raise SerpentError("; ".join(failed))
+
+
+def _deck_settings(deck, fallback):
+    """Serpent 'set' options as written in an existing deck (fallback if the deck is missing)."""
+    if not os.path.exists(deck):
+        return fallback
+    found = {}
+    with open(deck) as f:
+        for line in f:
+            if line.startswith("set "):
+                parts = line.split(None, 2)
+                if len(parts) == 3:
+                    found[parts[1]] = " ".join(parts[2].split())
+    return found or fallback
 
 
 def _pairs(tokens):

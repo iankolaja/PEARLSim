@@ -317,3 +317,22 @@ def test_k_target_mix_mode_inserts_the_core_mix_plus_a_correction(tmp_path, fake
     assert g2 == pytest.approx(min(1.0, max(0.0, 1.0 - (core_fuel + correction))))
     with pytest.raises(DeckError):
         sim.read_input_line("set_k_target 1.0 mode wild")
+
+
+@pytest.mark.e2e
+def test_reused_step_records_the_settings_it_ran_with(tmp_path, fake_serpent_command, monkeypatch):
+    """A restart after 'set pop' changed must not relabel finished steps (family-A switch to 3x, 2026-10-27)."""
+    write_core(tmp_path)
+    lines = [line.replace("insertion 2 off 1", "insertion 2 off 2") for line in deck_lines(2)]
+    (tmp_path / "case.inp").write_text("\n".join(lines) + "\n")
+    monkeypatch.setenv("FAKE_SERPENT_LOG", str(tmp_path / "serpent_log.jsonl"))
+    for pop in ("1000 10 5", "3000 10 5"):
+        os.chdir(tmp_path)
+        text = (tmp_path / "case.inp").read_text().replace("set pop 1000 10 5", f"set pop {pop}")
+        (tmp_path / "case.inp").write_text(text)
+        sim = Simulation("synthetic")
+        sim.serpent_command = fake_serpent_command
+        sim.cpu_cores = 2
+        sim.read_input_file("case.inp", directory_name="run")
+    record = json.loads((tmp_path / "run" / "synthetic_record_1.json").read_text())
+    assert record["provenance"]["serpent_settings"]["pop"] == "1000 10 5"

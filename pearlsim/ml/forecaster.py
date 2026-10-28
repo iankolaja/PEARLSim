@@ -203,7 +203,7 @@ def _chunks(tokens, scaler, length, rng):
     return x, y, z, valid
 
 
-def _loss(model_out, y, z, valid, config, floor):
+def _loss(model_out, y, z, valid, config, floor, step_floor=None):
     import torch
 
     mask = valid.unsqueeze(-1).float()
@@ -211,15 +211,19 @@ def _loss(model_out, y, z, valid, config, floor):
     if config.mode == "pretrain":
         return obs, {"obs_nll": obs.item()}
     zero = torch.zeros((), device=y.device)
-    step = gaussian_nll(model_out["step_mean"], model_out["step_log_var"], z, mask.expand_as(z)) if z.numel() else zero
+    step = (gaussian_nll(model_out["step_mean"], model_out["step_log_var"], z, mask.expand_as(z), step_floor)
+            if z.numel() else zero)
     total = step + (0.0 if config.mode == "probe" else config.aux_weight) * obs
     return total, {"obs_nll": obs.item(), "step_nll": step.item()}
 
 
-def fit(tokens, config=ForecasterConfig(), validation=None, noise_var=None, log=print, scaler=None, init=None):
+def fit(tokens, config=ForecasterConfig(), validation=None, noise_var=None, log=print, scaler=None, init=None,
+        step_noise_var=None):
     """Train a forecaster on TokenSet ``tokens``; returns (model, scaler, history).
 
     noise_var: per-observable variance floor in the scaler's target units (``scaler.y_std``).
+    step_noise_var: variance floor of the step targets in scaled units (``scaler.z_std``): one global label-noise
+    level (e.g. the simulator's per-step reactivity noise), not a per-sample weight.
     init: a phase-1 state dict (``probe``/``finetune``): the step head starts fresh, the rest is loaded.
     """
     import torch
@@ -245,6 +249,8 @@ def fit(tokens, config=ForecasterConfig(), validation=None, noise_var=None, log=
     params = [p for p in model.parameters() if p.requires_grad]
     optimiser = torch.optim.AdamW(params, lr=config.lr, weight_decay=config.weight_decay)
     floor = None if noise_var is None else torch.as_tensor(noise_var, dtype=torch.float32, device=config.device)
+    step_floor = (None if step_noise_var is None
+                  else torch.as_tensor(step_noise_var, dtype=torch.float32, device=config.device))
     steps_per_epoch = max(1, sum(len(x) for x in tokens.x) // (config.chunk * config.batch_size))
     history = []
     best_score, best_state = np.inf, None
@@ -254,7 +260,7 @@ def fit(tokens, config=ForecasterConfig(), validation=None, noise_var=None, log=
         for _ in range(steps_per_epoch):
             sub = tokens.subset(rng.integers(0, len(tokens.x), config.batch_size))
             x, y, z, valid = (torch.as_tensor(a, device=config.device) for a in _chunks(sub, scaler, config.chunk, rng))
-            loss, detail = _loss(model(x, padding=~valid), y, z, valid, config, floor)
+            loss, detail = _loss(model(x, padding=~valid), y, z, valid, config, floor, step_floor)
             optimiser.zero_grad()
             loss.backward()
             torch.nn.utils.clip_grad_norm_(params, 1.0)
@@ -262,7 +268,8 @@ def fit(tokens, config=ForecasterConfig(), validation=None, noise_var=None, log=
             parts.append(detail)
         entry = {"epoch": epoch, **{f"train_{k}": float(np.mean([p[k] for p in parts])) for k in parts[0]}}
         if validation is not None:
-            entry.update({f"validation_{k}": v for k, v in evaluate(model, scaler, validation, config, floor).items()})
+            entry.update({f"validation_{k}": v
+                          for k, v in evaluate(model, scaler, validation, config, floor, step_floor).items()})
             score = entry["validation_obs_nll" if config.mode == "pretrain" else "validation_step_nll"]
             if config.keep_best and score < best_score:
                 best_score = score
@@ -280,7 +287,7 @@ def evaluate_nll(model, scaler, tokens, config=ForecasterConfig(), noise_var=Non
     return evaluate(model, scaler, tokens, config, noise_var)["obs_nll"]
 
 
-def evaluate(model, scaler, tokens, config=ForecasterConfig(), noise_var=None):
+def evaluate(model, scaler, tokens, config=ForecasterConfig(), noise_var=None, step_noise_var=None):
     """Teacher-forced NLL per head over every token, chunked from the start of each sequence."""
     import torch
 
@@ -296,7 +303,7 @@ def evaluate(model, scaler, tokens, config=ForecasterConfig(), noise_var=None):
                 pieces = {"obs_nll": (out["obs_mean"], out["obs_log_var"], y, noise_var)}
                 if "step_mean" in out and tokens.z is not None:
                     z = torch.as_tensor(scaler.z(tokens.z[b][part])[None], device=config.device)
-                    pieces["step_nll"] = (out["step_mean"], out["step_log_var"], z, None)
+                    pieces["step_nll"] = (out["step_mean"], out["step_log_var"], z, step_noise_var)
                 for key, (mean, log_var, target, floor) in pieces.items():
                     value = gaussian_nll(mean, log_var, target, torch.ones_like(target), floor).item()
                     sums[key] = sums.get(key, 0.0) + value * target.numel()

@@ -80,6 +80,9 @@ def main(argv=None):
     parser.add_argument("--context", type=int, default=32)
     parser.add_argument("--horizon", type=int, default=20)
     parser.add_argument("--stride", type=int, default=5)
+    parser.add_argument("--label-noise-pcm", type=float, default=265.0,
+                        help="global reactivity label noise (1 sigma, pcm) used as the head's variance floor; "
+                             "v1: 265; v2: from the replica spread")
     args = parser.parse_args(argv)
     import torch
 
@@ -108,7 +111,9 @@ def main(argv=None):
                                   dropout=p1["dropout"], device=args.device, mode=mode,
                                   lr=p1["lr"] if mode != "finetune" else p1["lr"] / 3)
         start = time.time()
+        step_noise_var = np.array([(args.label_noise_pcm / scaler.z_std[0]) ** 2], dtype=np.float32)
         model, scaler_m, history = fit(train, config, validation=val, noise_var=noise_var, scaler=scaler,
+                                       step_noise_var=step_noise_var,
                                        init=None if mode == "joint" else phase1["state_dict"],
                                        log=lambda e, m=mode: print(m, e, flush=True))
         model.cpu()

@@ -104,6 +104,10 @@ def test_phase2_modes_learn_the_step_target():
     obs, steps = rollout(model, scaler, d[:20], u[:20], u[20:25], with_steps=True)
     assert obs.shape == (6, 2) and steps.shape == (6, 1)
     assert abs(steps[0, 0] - frame["rho"].iloc[19]) < 0.3 * frame["rho"].std()  # horizon 0: the decision step
+    # a global label-noise floor bounds the step NLL from below: 0.5 log(var) >= 0.5 log(floor)
+    floor = np.array([0.25], dtype=np.float32)
+    floored = evaluate(model, scaler, held, ForecasterConfig(**small), step_noise_var=torch.as_tensor(floor))
+    assert floored["step_nll"] >= 0.5 * np.log(floor[0]) - 1e-6
     with pytest.raises(ValueError, match="phase-1 state"):
         fit(tokens, ForecasterConfig(epochs=1, mode="probe", **small), log=lambda e: None, init=None)
 

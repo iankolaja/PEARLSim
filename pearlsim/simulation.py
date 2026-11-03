@@ -19,7 +19,7 @@ import subprocess
 import numpy as np
 import pandas as pd
 
-from pearlsim import records, replicas
+from pearlsim import checkpoint, records, replicas
 from pearlsim.core import Core
 from pearlsim.material import Material
 from pearlsim.nuclear_data import ENDF7_V1, PROFILES, V1_FLIBE_LI6_PPM, V1_PEBBLE_CORE_DENSITY, CoreConditions
@@ -68,6 +68,9 @@ class Simulation:
         self.requested_power = None
         self.triso_source = None  # TRISO position file named by triso_file (more copies are written on demand)
         self._provenance = None
+        self._deck = None  # (lines, index of the line being read) while read_input_file runs, for checkpoints
+        self._resume_steps = 0  # steps of the next insertion line already done (resumed from a checkpoint)
+        self.resumed_from = None  # last finished step restored from a checkpoint, if any
 
     # ------------------------------------------------------------------ deck parsing
 
@@ -84,8 +87,19 @@ class Simulation:
             lines = f.readlines()
         os.makedirs(directory_name, exist_ok=True)
         os.chdir(directory_name)
-        for line in lines:
-            self.read_input_line(line)
+        checkpoint.code_fingerprint()  # labels checkpoints with the code loaded now, at the start of the run
+        start = 0
+        resume = checkpoint.restore(self, lines)
+        if resume is not None:
+            start, self._resume_steps = resume
+            self.resumed_from = self.core.iteration - 1
+            print(f"Resuming from the checkpoint after step {self.resumed_from}", flush=True)
+        try:
+            for index in range(start, len(lines)):
+                self._deck = (lines, index)
+                self.read_input_line(lines[index])
+        finally:
+            self._deck = None
 
     def read_input_line(self, raw_line):
         tokens = raw_line.split("#", 1)[0].split()
@@ -184,7 +198,8 @@ class Simulation:
         get_boolean(args[1])  # thermal-coupling flag; not implemented
         serpent_flag = int(args[2])
         insertion_ratios, insertion_dict = get_insertion_ratio_pairs(args[3:])
-        for _ in range(num_steps):
+        first, self._resume_steps = self._resume_steps, 0
+        for done in range(first, num_steps):
             graphite = insertion_dict.get("graphpeb", 0.0)
             ratios = insertion_ratios
             if self.k_target is not None:
@@ -195,6 +210,8 @@ class Simulation:
                              self.fima_discharge_rel_std, debug=self.debug)
             self.apply_power_cap()
             self.run_step(serpent_flag, graphite)
+            if serpent_flag == 2 and self._deck is not None:
+                checkpoint.save(self, *self._deck, done + 1)
 
     def controlled_graphite_fraction(self, deck_graphite):
         """Graphite insertion fraction for this step from the previous step's end-of-step k (set_k_target).

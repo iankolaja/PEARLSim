@@ -101,6 +101,11 @@ class Material():
             conc_tot += self.concentrations.pop("5011<lib>")
         self.concentrations["5011<lib>"] = conc_tot
 
+    def normalise_names(self, debug=0):
+        """In-place nuclide-name clean-up done when the material is written (B-11 entry, duplicate names)."""
+        self.fix_B11()
+        self.merge_duplicates(debug)
+
     def merge_duplicates(self, debug):
         keys_to_remove = []
         for key in self.concentrations.keys():
@@ -138,8 +143,7 @@ class Material():
             return conditions.matrix if layer == "matrix" else conditions.coating
 
         self.cross_section_str = profile.suffix(temperature)
-        self.fix_B11()
-        self.merge_duplicates(debug)
+        self.normalise_names(debug)
         if self.density == "sum fix":
             density_s = f"sum fix {self.cross_section_str[1:]} {round(temperature,3)}"
         else:

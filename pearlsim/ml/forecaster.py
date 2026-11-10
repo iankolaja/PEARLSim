@@ -11,6 +11,10 @@ Phase-2 modes: ``joint`` (all from scratch), ``probe`` (phase-1 trunk frozen, ne
 Each head predicts a mean and a log-variance (Gaussian NLL); the known measurement noise floors the
 observables' variance (noise-aware). Observable targets default to the change D_{i+1} - D_i. Rollout feeds the
 predicted means back with the planned controls. Torch is imported lazily so ``import pearlsim.ml`` stays light.
+
+Branch sequences (``Sequence.first_own_row`` f > 0): the parent's rows are context only. Token i's next-observable
+target (row i+1) counts from i = f-1 and its step target (row i) from i = f, in the loss, the scaling and the
+evaluation (``TokenSet.obs_own`` / ``step_own``).
 """
 
 from dataclasses import dataclass, field
@@ -30,16 +34,29 @@ class TokenSet:
     control_columns: list
     z: list = None
     step_columns: list = field(default_factory=list)
+    first_own: list = None  # per sequence: first row that is its own data (branch runs), default 0
+
+    def own(self, b):
+        return 0 if self.first_own is None else self.first_own[b]
+
+    def obs_own(self, b):
+        """Tokens whose next-observable target (row i+1) is this sequence's own."""
+        return np.arange(len(self.x[b])) + 1 >= self.own(b)
+
+    def step_own(self, b):
+        """Tokens whose step target (row i) is this sequence's own."""
+        return np.arange(len(self.x[b])) >= self.own(b)
 
     def subset(self, index):
         z = None if self.z is None else [self.z[i] for i in index]
+        first_own = None if self.first_own is None else [self.first_own[i] for i in index]
         return TokenSet([self.x[i] for i in index], [self.y[i] for i in index], [self.names[i] for i in index],
-                        self.obs_columns, self.control_columns, z, self.step_columns)
+                        self.obs_columns, self.control_columns, z, self.step_columns, first_own)
 
 
 def make_tokens(sequences, obs_columns, control_columns, step_columns=()):
     """Tokens x_i = [D_i, u_i] with targets y_i = D_{i+1} and z_i = step columns of row i, i = 0 .. T-2."""
-    xs, ys, zs, names = [], [], [], []
+    xs, ys, zs, names, first_own = [], [], [], [], []
     for seq in sequences:
         obs = seq.frame[list(obs_columns)].to_numpy(dtype=np.float32)
         ctrl = seq.frame[list(control_columns)].to_numpy(dtype=np.float32)
@@ -50,8 +67,9 @@ def make_tokens(sequences, obs_columns, control_columns, step_columns=()):
         if step_columns:
             zs.append(seq.frame[list(step_columns)].to_numpy(dtype=np.float32)[:-1])
         names.append(seq.name)
+        first_own.append(getattr(seq, "first_own_row", 0))
     return TokenSet(xs, ys, names, list(obs_columns), list(control_columns), zs if step_columns else None,
-                    list(step_columns))
+                    list(step_columns), first_own)
 
 
 @dataclass
@@ -71,17 +89,19 @@ class TokenScaler:
 
     @classmethod
     def fit(cls, tokens, delta=True):
-        x = np.concatenate(tokens.x)
+        """Statistics over the tokens whose targets are their sequence's own (branch prefixes excluded)."""
+        own = [tokens.obs_own(b) for b in range(len(tokens.x))]
+        x = np.concatenate([xs[m] for xs, m in zip(tokens.x, own, strict=True)])
         mean, std = x.mean(axis=0), _safe(x.std(axis=0))
         n_obs = len(tokens.obs_columns)
         if delta:
-            change = np.concatenate([y - xs[:, :n_obs] for xs, y in zip(tokens.x, tokens.y, strict=True)])
+            change = np.concatenate([(y - xs[:, :n_obs])[m] for xs, y, m in zip(tokens.x, tokens.y, own, strict=True)])
             y_mean, y_std = change.mean(axis=0), _safe(change.std(axis=0))
         else:
             y_mean, y_std = mean[:n_obs], std[:n_obs]
         z_mean = z_std = None
         if tokens.z is not None:
-            z = np.concatenate(tokens.z)
+            z = np.concatenate([zs[tokens.step_own(b)] for b, zs in enumerate(tokens.z)])
             z_mean, z_std = z.mean(axis=0).astype(np.float32), _safe(z.std(axis=0)).astype(np.float32)
         f32 = np.float32
         return cls(mean.astype(f32), std.astype(f32), y_mean.astype(f32), y_std.astype(f32), n_obs, delta,
@@ -186,32 +206,36 @@ class ForecasterConfig:
 
 
 def _chunks(tokens, scaler, length, rng):
-    """One random chunk per sequence (shorter sequences padded), scaled."""
+    """One random chunk per sequence (shorter sequences padded), scaled, with the masks of real tokens (``valid``)
+    and of own next-observable and step targets. A branch's chunk reaches at least its first own target."""
     n_in, n_obs = tokens.x[0].shape[1], tokens.y[0].shape[1]
     n_step = 0 if tokens.z is None else tokens.z[0].shape[1]
     x = np.zeros((len(tokens.x), length, n_in), np.float32)
     y = np.zeros((len(tokens.x), length, n_obs), np.float32)
     z = np.zeros((len(tokens.x), length, n_step), np.float32)
     valid = np.zeros((len(tokens.x), length), bool)
+    obs_mask, step_mask = np.zeros_like(valid), np.zeros_like(valid)
     for b, xs in enumerate(tokens.x):
-        start = rng.integers(0, max(1, len(xs) - length + 1))
+        lowest = min(max(0, tokens.own(b) - length), max(0, len(xs) - length))
+        start = rng.integers(lowest, max(lowest + 1, len(xs) - length + 1))
         part = slice(start, start + length)
         n = len(xs[part])
         x[b, :n], y[b, :n], valid[b, :n] = scaler.x(xs[part]), scaler.y(tokens.y[b][part], xs[part]), True
+        obs_mask[b, :n], step_mask[b, :n] = tokens.obs_own(b)[part], tokens.step_own(b)[part]
         if n_step:
             z[b, :n] = scaler.z(tokens.z[b][part])
-    return x, y, z, valid
+    return x, y, z, valid, obs_mask, step_mask
 
 
-def _loss(model_out, y, z, valid, config, floor, step_floor=None):
+def _loss(model_out, y, z, obs_mask, step_mask, config, floor, step_floor=None):
     import torch
 
-    mask = valid.unsqueeze(-1).float()
-    obs = gaussian_nll(model_out["obs_mean"], model_out["obs_log_var"], y, mask.expand_as(y), floor)
+    obs_mask, step_mask = obs_mask.unsqueeze(-1).float(), step_mask.unsqueeze(-1).float()
+    obs = gaussian_nll(model_out["obs_mean"], model_out["obs_log_var"], y, obs_mask.expand_as(y), floor)
     if config.mode == "pretrain":
         return obs, {"obs_nll": obs.item()}
     zero = torch.zeros((), device=y.device)
-    step = (gaussian_nll(model_out["step_mean"], model_out["step_log_var"], z, mask.expand_as(z), step_floor)
+    step = (gaussian_nll(model_out["step_mean"], model_out["step_log_var"], z, step_mask.expand_as(z), step_floor)
             if z.numel() else zero)
     total = step + (0.0 if config.mode == "probe" else config.aux_weight) * obs
     return total, {"obs_nll": obs.item(), "step_nll": step.item()}
@@ -259,8 +283,10 @@ def fit(tokens, config=ForecasterConfig(), validation=None, noise_var=None, log=
         parts = []
         for _ in range(steps_per_epoch):
             sub = tokens.subset(rng.integers(0, len(tokens.x), config.batch_size))
-            x, y, z, valid = (torch.as_tensor(a, device=config.device) for a in _chunks(sub, scaler, config.chunk, rng))
-            loss, detail = _loss(model(x, padding=~valid), y, z, valid, config, floor, step_floor)
+            x, y, z, valid, obs_mask, step_mask = (torch.as_tensor(a, device=config.device)
+                                                   for a in _chunks(sub, scaler, config.chunk, rng))
+            loss, detail = _loss(model(x, padding=~valid), y, z, obs_mask & valid, step_mask & valid, config, floor,
+                                 step_floor)
             optimiser.zero_grad()
             loss.backward()
             torch.nn.utils.clip_grad_norm_(params, 1.0)
@@ -288,7 +314,7 @@ def evaluate_nll(model, scaler, tokens, config=ForecasterConfig(), noise_var=Non
 
 
 def evaluate(model, scaler, tokens, config=ForecasterConfig(), noise_var=None, step_noise_var=None):
-    """Teacher-forced NLL per head over every token, chunked from the start of each sequence."""
+    """Teacher-forced NLL per head over every own target, chunked from the start of each sequence."""
     import torch
 
     model.eval()
@@ -300,14 +326,19 @@ def evaluate(model, scaler, tokens, config=ForecasterConfig(), noise_var=None, s
                 x = torch.as_tensor(scaler.x(xs[part])[None], device=config.device)
                 y = torch.as_tensor(scaler.y(tokens.y[b][part], xs[part])[None], device=config.device)
                 out = model(x)
+                own = {"obs_nll": tokens.obs_own(b)[part], "step_nll": tokens.step_own(b)[part]}
                 pieces = {"obs_nll": (out["obs_mean"], out["obs_log_var"], y, noise_var)}
                 if "step_mean" in out and tokens.z is not None:
                     z = torch.as_tensor(scaler.z(tokens.z[b][part])[None], device=config.device)
                     pieces["step_nll"] = (out["step_mean"], out["step_log_var"], z, step_noise_var)
                 for key, (mean, log_var, target, floor) in pieces.items():
-                    value = gaussian_nll(mean, log_var, target, torch.ones_like(target), floor).item()
-                    sums[key] = sums.get(key, 0.0) + value * target.numel()
-                    counts[key] = counts.get(key, 0) + target.numel()
+                    mask = torch.as_tensor(own[key], device=config.device)[None, :, None].float().expand_as(target)
+                    count = int(mask.sum().item())
+                    if not count:
+                        continue
+                    value = gaussian_nll(mean, log_var, target, mask, floor).item()
+                    sums[key] = sums.get(key, 0.0) + value * count
+                    counts[key] = counts.get(key, 0) + count
     return {key: sums[key] / counts[key] for key in sums}
 
 

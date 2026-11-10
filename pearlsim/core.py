@@ -502,6 +502,13 @@ class Core():
                         volumes[mat_name] = zone.inventory[mat_name] * fuel_kernel_per_pebble_volume
         return volumes
 
+    def normalise_in_core_names(self, debug=0):
+        """What writing a deck does in place to the in-core materials (Material.normalise_names), without the deck:
+        for steps that reuse finished Serpent results, so their state matches a run that wrote the deck."""
+        for material in self.materials.values():
+            if self.is_nonzero_in_core(material.name):
+                material.normalise_names(debug)
+
     def generate_input(self, serpent_settings, burnup_time_step, debug, cr_position, replica=None, rng=None):
         """Write this step's Serpent deck and pebble file; return the deck name.
 
@@ -533,7 +540,7 @@ class Core():
                                                     registry)
         triso_counter = 1
         for material in self.materials.values():
-            if self.is_nonzero_in_core(material.name):
+            if self.is_nonzero_in_core(material.name):  # normalise_in_core_names mirrors this selection
                 input_str += material.write_input(triso_counter, self.static_fuel_materials, debug,
                                                   profile=self.nuclear_data, conditions=self.conditions,
                                                   registry=registry)

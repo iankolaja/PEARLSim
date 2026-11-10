@@ -38,6 +38,8 @@ def rollout_errors(model, scaler, sequences, obs, ctrl, context, horizon, stride
             pred = rollout(model, scaler, d[t0 - context:t0], u[t0 - context:t0], u[t0:t0 + horizon])
             truth = d[t0:t0 + horizon + 1]
             for h in range(horizon + 1):
+                if t0 + h < seq.first_own_row:  # branch runs: the parent's rows are not this run's samples
+                    continue
                 model_err[h].append(np.mean(np.abs(pred[h] - truth[h]) / scale))
                 persist_err[h].append(np.mean(np.abs(d[t0 - 1] - truth[h]) / scale))
     return ([float(np.mean(e)) if e else None for e in model_err],

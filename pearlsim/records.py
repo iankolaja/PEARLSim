@@ -358,6 +358,11 @@ def flatten(record, meshes=True):
         for r, value in enumerate(block["replicas"]):
             row[f"keff_{point}_rep{r}"] = value
     row["final_analog_keff"] = record["keff"]["eos"]["mean"]  # v1 name of the target
+    # a branch run (fork_from): the parent's sequence name (its run directory's name, as in pearlsim.gather) and
+    # the parent's last step it shares; the data loader prepends those steps as context, not as samples
+    fork = (record.get("provenance") or {}).get("fork")
+    row["fork_parent"] = os.path.basename(os.path.normpath(fork["parent"])) if fork else None
+    row["fork_step"] = fork["step"] if fork else None
     power = record["power"]
     for key in ("mesh_power_W", "mesh_power_over_set_power", "peaking_mesh", "peaking_radial", "peaking_axial",
                 "peaking_zone"):

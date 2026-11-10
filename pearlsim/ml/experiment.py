@@ -173,7 +173,7 @@ def run(cfg, out_dir, log=print):
     pca_source = [s for s in sequences if s.family in (fit_fams + val_fams if paper_split else fit_fams)]
     mesh_names = []
     for prefix, n in cfg["targets"]["meshes"].items():
-        pca = features.MeshPCA(prefix, n).fit([s.frame for s in pca_source])
+        pca = features.MeshPCA(prefix, n).fit([s.own_frame() for s in pca_source])
         for seq in sequences:
             seq.frame = pca.add_scores(seq.frame)
         mesh_names += pca.names

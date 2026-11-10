@@ -8,12 +8,19 @@ when any of these holds:
 
 * the deck lines up to that position, the pearlsim source, or the Python / numpy / pandas versions differ from
   when it was written;
-* a finished step's record or final .bumat is missing, or a .bumat is newer than the checkpoint (steps rerun);
+* a finished step's record, zone map, materials snapshot or final .bumat is missing (the replay writes the first
+  three again), or a .bumat is newer than the checkpoint (steps rerun);
 * a line before that position runs steps in another way (transport, load_from_step, restart, or an insertion
   line whose Serpent flag is not 2), since replaying it would not merely reuse results.
 
 Settings that belong to the job (cores, nodes, debug level, Serpent command) are kept from the new job, and the
 cached run provenance (host, Slurm job) is recomputed.
+
+Every ``checkpoint_every`` steps (``set_checkpoint_archive``, default 10) the checkpoint is also kept as
+``pearlsim_checkpoint_<run>_step<N>.pkl``. A branch run starts from one with ``fork_from <parent dir> <N>``
+(decision 5a, docs/v2_dataset_decisions.md): it continues exactly as the parent would have after step N, under the
+branch deck's own controls, and records its lineage (``Simulation.fork``) in every step record, so the data loader
+can give a branch the parent's steps as context without counting them twice.
 
 Why: on savio4_htc at low priority the family-A run-ins were preempted ~17 times a day, and each restart replayed
 every finished step (~5 s each, ~14 min at step 160) before the interrupted step started again (2026-11-02).
@@ -47,6 +54,19 @@ _OTHER_STEP_KEYWORDS = ("transport", "load_from_step", "restart")
 
 def file_name(simulation_name):
     return f"{FILE_PREFIX}_{simulation_name}.pkl"
+
+
+def archive_name(simulation_name, step):
+    """The kept checkpoint of the state after ``step``."""
+    return f"{FILE_PREFIX}_{simulation_name}_step{step}.pkl"
+
+
+def _sha256(path):
+    digest = hashlib.sha256()
+    with open(path, "rb") as f:
+        for block in iter(lambda: f.read(1 << 24), b""):
+            digest.update(block)
+    return digest.hexdigest()
 
 
 _FINGERPRINT = []
@@ -83,7 +103,8 @@ def _tokens(line):
 
 
 def resumable_prefix(lines, index):
-    """Whether lines[:index] only configure the run or reuse finished steps, and lines[index] is 'insertion N x 2'."""
+    """Whether lines[:index] only configure the run, start it from a kept checkpoint (fork_from) or reuse finished
+    steps, and lines[index] is 'insertion N x 2'."""
     for line in lines[:index]:
         tokens = _tokens(line)
         if tokens and (tokens[0] in _OTHER_STEP_KEYWORDS or tokens[0] == "insertion" and tokens[3:4] != ["2"]):
@@ -110,8 +131,19 @@ def save(simulation, lines, index, steps_done):
     with open(name + ".part", "wb") as f:
         pickle.dump(payload, f, protocol=pickle.HIGHEST_PROTOCOL)
     os.replace(name + ".part", name)
-    logger.info("checkpoint after step %d (%.0f MB, %.1f s)", simulation.core.iteration - 1,
-                os.path.getsize(name) / 1e6, time.time() - start)
+    step = simulation.core.iteration - 1
+    every = getattr(simulation, "checkpoint_every", None)
+    if every and step % every == 0:
+        kept = archive_name(simulation.simulation_name, step)
+        if os.path.exists(kept):
+            os.remove(kept)
+        os.link(name, kept)  # the next save replaces 'name' by a new file, so this one keeps its content
+    logger.info("checkpoint after step %d (%.0f MB, %.1f s)", step, os.path.getsize(name) / 1e6, time.time() - start)
+
+
+def _first_own_step(state):
+    fork = state.get("fork")
+    return fork["step"] + 1 if fork else 1
 
 
 def _reason_to_ignore(payload, simulation, lines, written):
@@ -127,11 +159,18 @@ def _reason_to_ignore(payload, simulation, lines, written):
     if not resumable_prefix(lines, index):
         return "deck runs steps other than by reusing them"
     state = payload["state"]
+    fork = state.get("fork")
+    if fork:
+        parent = os.path.join(fork["parent"], archive_name(simulation.simulation_name, fork["step"]))
+        if not os.path.isfile(parent) or _sha256(parent) != fork["checkpoint_sha256"]:
+            return f"the parent checkpoint {parent} is missing or changed"
     probe = type(simulation).__new__(type(simulation))
     probe.__dict__.update(state)
-    for iteration in range(1, payload["iteration"]):
-        if not os.path.isfile(records.record_file(simulation.simulation_name, iteration)):
-            return f"record of step {iteration} missing"
+    for iteration in range(_first_own_step(state), payload["iteration"]):
+        for name in (records.record_file(simulation.simulation_name, iteration), f"zone_map{iteration}.json",
+                     f"core_materials_{iteration}.json.gz"):
+            if not os.path.isfile(name):
+                return f"{name} missing"
         for bumat in _final_bumats(probe, iteration):
             if not os.path.isfile(bumat):
                 return f"{bumat} missing"
@@ -159,6 +198,14 @@ def restore(simulation, lines):
     if reason:
         logger.warning("checkpoint %s not used (%s); replaying finished steps", name, reason)
         return None
+    _apply(simulation, payload)
+    logger.info("resuming from checkpoint after step %d (deck line %d, %d steps of it done)",
+                payload["iteration"] - 1, payload["line"] + 1, payload["steps_done"])
+    return payload["line"], payload["steps_done"]
+
+
+def _apply(simulation, payload):
+    """Load a checkpoint's state into ``simulation``, keeping the job's own settings."""
     simulation.__dict__.update(payload["state"])
     core = simulation.core
     # the profile is compared by identity (e.g. 'is ENDF7_V1'); unpickling made a copy
@@ -166,6 +213,32 @@ def restore(simulation, lines):
         core.nuclear_data = PROFILES[core.nuclear_data.name]
     random.setstate(payload["random"])
     np.random.set_state(payload["np_random"])
-    logger.info("resuming from checkpoint after step %d (deck line %d, %d steps of it done)",
-                payload["iteration"] - 1, payload["line"] + 1, payload["steps_done"])
-    return payload["line"], payload["steps_done"]
+
+
+def fork(simulation, parent_dir, step):
+    """Start ``simulation`` from the parent run's kept checkpoint after ``step`` (deck keyword fork_from).
+
+    The parent's state must come from this pearlsim source and these library versions: a branch continues the
+    parent exactly, which a different code version would not guarantee. Raises ValueError otherwise.
+    """
+    parent_dir = os.path.abspath(parent_dir)
+    path = os.path.join(parent_dir, archive_name(simulation.simulation_name, step))
+    if not os.path.isfile(path):
+        kept = sorted(glob.glob(os.path.join(parent_dir, archive_name(simulation.simulation_name, "*"))))
+        raise ValueError(f"no kept checkpoint {path}; kept: {[os.path.basename(k) for k in kept] or 'none'}")
+    with open(path, "rb") as f:
+        payload = pickle.load(f)
+    if payload.get("format") != FORMAT:
+        raise ValueError(f"{path}: checkpoint format {payload.get('format')}, expected {FORMAT}")
+    if payload["code"] != code_fingerprint():
+        raise ValueError(f"{path} was written by a different pearlsim source; fork with the parent's code version")
+    if payload["versions"] != library_versions():
+        raise ValueError(f"{path}: library versions {payload['versions']} differ from {library_versions()}")
+    if payload["iteration"] != step + 1:
+        raise ValueError(f"{path} holds the state after step {payload['iteration'] - 1}, not {step}")
+    if not os.path.isfile(os.path.join(parent_dir, records.record_file(simulation.simulation_name, step))):
+        raise ValueError(f"the parent has no record of step {step} in {parent_dir}")
+    _apply(simulation, payload)
+    simulation.fork = {"parent": parent_dir, "step": step, "checkpoint_sha256": _sha256(path),
+                       "parent_fork": payload["state"].get("fork")}
+    logger.info("forked from %s after step %d", parent_dir, step)

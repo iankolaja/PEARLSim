@@ -13,6 +13,10 @@ Horizon 0 reproduces the corrected one-step alignment of review #3 (window ..i,
 targets rho_i and D_{i+1}). ``input_offset=1`` gives the v1 notebook's alignment
 (window ..i-1 for the same targets), for reproducing the paper only. Targets that fall past the end of a sequence are
 masked out rather than dropped, so every window with a full history is used.
+
+Branch sequences (``Sequence.first_own_row`` > 0, see ``pearlsim.ml.data``): targets read from rows before
+``first_own_row`` are the parent's samples and are masked; a window whose targets are all such rows is dropped,
+while one that reaches the branch's own rows at some horizon is kept (its future controls are the branch's).
 """
 
 from dataclasses import dataclass, field
@@ -63,7 +67,10 @@ def make_windows(sequences, input_columns, targets, window=8, horizon=0, control
         u = seq.frame[control_columns].to_numpy(dtype=float) if control_columns else np.zeros((len(x), 0))
         y = seq.frame[[t.column for t in targets]].to_numpy(dtype=float)
         n = len(x)
+        first_own = getattr(seq, "first_own_row", 0)
         for i in range(window - 1 + input_offset, n):
+            if i + horizon + any(t.kind == "next" for t in targets) < first_own:
+                continue  # every target is a parent's row
             past.append(x[i - window + 1 - input_offset: i + 1 - input_offset])
             fut = np.zeros((horizon, len(control_columns)))
             for h in range(1, horizon + 1):
@@ -75,7 +82,7 @@ def make_windows(sequences, input_columns, targets, window=8, horizon=0, control
             for h in range(horizon + 1):
                 for j, spec in enumerate(targets):
                     r = i + h + (spec.kind == "next")
-                    if r < n and not np.isnan(y[r, j]):
+                    if first_own <= r < n and not np.isnan(y[r, j]):
                         value[h, j], mask[h, j] = y[r, j], True
             values.append(value)
             masks.append(mask)

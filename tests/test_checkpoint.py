@@ -153,6 +153,23 @@ def test_checkpoint_is_ignored_when_its_step_outputs_are_missing(tmp_path, fake_
     assert_same_run(sim, case, reference, normalise=replay_normalised)
 
 
+def test_step_interrupted_before_its_bookkeeping_is_repaired(tmp_path, fake_serpent_command, monkeypatch, reference):
+    """Preempted after a step's last .bumat but before its zone map and materials were saved (A1 step 207): the
+    restart must write them again, and a checkpoint must not skip over the gap."""
+    case = tmp_path / "gap"
+    case.mkdir()
+
+    def lose_bookkeeping(run_dir):
+        for name in ("zone_map3.json", "core_materials_3.json.gz", "synthetic_record_3.json"):
+            (run_dir / name).unlink()
+
+    sim = interrupted(case, fake_serpent_command, monkeypatch, 5, before_resume=lose_bookkeeping)
+    assert sim.resumed_from is None
+    assert_same_run(sim, case, reference, normalise=replay_normalised)
+    assert json.loads((case / "run" / "synthetic_record_3.json").read_text())["inventory"]["fuel_pebbles"] > 0
+    assert not list((case / "run").glob("part_*"))
+
+
 def test_checkpoint_is_ignored_when_the_code_changed(tmp_path, fake_serpent_command, monkeypatch, reference):
     case = tmp_path / "code"
     case.mkdir()

@@ -71,6 +71,8 @@ class Simulation:
         self._deck = None  # (lines, index of the line being read) while read_input_file runs, for checkpoints
         self._resume_steps = 0  # steps of the next insertion line already done (resumed from a checkpoint)
         self.resumed_from = None  # last finished step restored from a checkpoint, if any
+        self.checkpoint_every = 10  # keep the checkpoint of every n-th step for branch runs (set_checkpoint_archive)
+        self.fork = None  # lineage of a branch run (fork_from): parent run directory, fork step, ...
 
     # ------------------------------------------------------------------ deck parsing
 
@@ -227,7 +229,7 @@ class Simulation:
         """
         previous = self.controlled_graphite if self.controlled_graphite is not None else deck_graphite
         target = previous
-        path = records.record_file(self.simulation_name, self.core.iteration - 1)
+        path = self.record_path(self.core.iteration - 1)
         if os.path.exists(path):
             with open(path) as f:
                 k_prev = json.load(f)["keff"]["eos"]["mean"]
@@ -325,6 +327,34 @@ class Simulation:
 
     def _kw_set_max_passes(self, args):
         self.core.max_passes = int(args[0])
+
+    def _kw_set_checkpoint_archive(self, args):
+        """set_checkpoint_archive <n> | off: keep the checkpoint of every n-th step (branch runs start from them)."""
+        self.checkpoint_every = None if args[0] == "off" else int(args[0])
+        if self.checkpoint_every is not None and self.checkpoint_every < 1:
+            raise ValueError("the checkpoint interval must be at least 1")
+
+    def _kw_fork_from(self, args):
+        """fork_from <parent run directory> <step>: start this run from the parent's kept checkpoint after <step>.
+
+        The branch continues exactly as the parent would have; the lines after fork_from set its own controls. It
+        replaces the whole simulation state, so it must be the deck's first keyword line. The parent directory is
+        relative to the deck's directory, like other deck paths.
+        """
+        lines, index = self._deck if self._deck is not None else ([], 0)
+        if self._deck is None or any(line.split("#", 1)[0].split() for line in lines[:index]):
+            raise DeckError("fork_from must be the first keyword line of a deck read with read_input_file")
+        checkpoint.fork(self, os.path.join("..", args[0]), int(args[1]))
+
+    def record_path(self, step):
+        """The record of ``step``: this run's own, or for steps up to a fork the parent's."""
+        fork = self.fork
+        while fork is not None and step <= fork["step"]:
+            path = os.path.join(fork["parent"], records.record_file(self.simulation_name, step))
+            if fork["parent_fork"] is None or step > fork["parent_fork"]["step"]:
+                return path
+            fork = fork["parent_fork"]
+        return records.record_file(self.simulation_name, step)
 
     def _kw_load_from_step(self, args):
         self.load_from_step(int(args[0]), int(args[1]) if len(args) > 1 else 0)
@@ -521,8 +551,19 @@ class Simulation:
             missing = [bumats[r] for r in to_run if not os.path.isfile(bumats[r])]
             if missing:
                 raise SerpentError(f"Serpent finished without writing {', '.join(missing)}")
-            self.core.save_zone_maps(zone_file_name)
-            self.core.save_all_materials(f"core_materials_{iteration}.json.gz")
+        if not to_run:
+            # no deck written this time: apply the name clean-up that writing it does to the in-core materials, so
+            # the state and snapshots equal an uninterrupted run's (it differed by merged names and a zero B-11)
+            self.core.normalise_in_core_names(self.debug)
+        # also when all replicas finished before an interruption that came before these were saved (A1 step 207,
+        # 2026-11-03: preempted 4 s after the last .bumat), so a replay repairs such steps
+        materials_file = f"core_materials_{iteration}.json.gz"
+        if to_run or not (os.path.isfile(zone_file_name) and os.path.isfile(materials_file)):
+            # written under another name first: an interruption must not leave a truncated file that looks finished
+            self.core.save_zone_maps(f"part_{zone_file_name}")
+            self.core.save_all_materials(f"part_{materials_file}")
+            os.replace(f"part_{zone_file_name}", zone_file_name)
+            os.replace(f"part_{materials_file}", materials_file)
         spread = self.core.update_from_bumat(self.debug, step=last_step, num_replicas=self.replicas)
         if self.replicas > 1:
             replicas.write_spread(f"{self.simulation_name}_replica_spread_{iteration}.json", spread)
@@ -539,7 +580,8 @@ class Simulation:
         if self._provenance is None:
             self._provenance = records.run_provenance(self.serpent_command, settings, self.dataset_version)
         return {**self._provenance, "dataset_version": self.dataset_version,
-                "serpent_settings": {k: v for k, v in settings.items() if k != "seed"}}
+                "serpent_settings": {k: v for k, v in settings.items() if k != "seed"},
+                "fork": self.fork}
 
     def load_from_step(self, load_iteration, burnup_step, debug=0):
         for channel in self.core.zones:

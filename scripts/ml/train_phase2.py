@@ -43,8 +43,9 @@ def teacher_forced_rho(model, scaler, tokens, chunk):
             for start in range(0, len(xs), chunk):
                 part = slice(start, start + chunk)
                 out = model(torch.as_tensor(scaler.x(xs[part])[None]))
-                pred = scaler.unscale_z(out["step_mean"][0].numpy())[:, 0]
-                truth = tokens.z[b][part][:, 0]
+                own = tokens.step_own(b)[part]  # branch runs: the parent's rows are not this run's samples
+                pred = scaler.unscale_z(out["step_mean"][0].numpy())[:, 0][own]
+                truth = tokens.z[b][part][:, 0][own]
                 errors.append(pred - truth)
                 truths.append(truth)
     e, t = np.concatenate(errors), np.concatenate(truths)
@@ -63,7 +64,8 @@ def rollout_rho(model, scaler, sequences, obs, ctrl, context, horizon, stride):
             _, steps = rollout(model, scaler, d[t0 - context:t0], u[t0 - context:t0], u[t0:t0 + horizon],
                                with_steps=True)
             for h in range(horizon + 1):
-                errors[h].append(abs(steps[h, 0] - rho[t0 - 1 + h]))
+                if t0 - 1 + h >= seq.first_own_row:  # branch runs: the parent's rows are not this run's samples
+                    errors[h].append(abs(steps[h, 0] - rho[t0 - 1 + h]))
     return [float(np.mean(e)) if e else None for e in errors]
 
 

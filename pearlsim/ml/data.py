@@ -4,6 +4,11 @@ Columns use the v2 record names (``pearlsim.records.flatten``). v1 columns are
 renamed on loading: ``final_analog_keff`` -> ``keff_eos``; v1 has no exact fuel
 pebble count, so ``power_per_fuel_pebble`` is estimated as in v1 (see
 ``features.v1_power_per_fuel_pebble``).
+
+Branch runs (``fork_from``, decision 5a): a branch's sequence is its parent's rows up to the fork step followed
+by its own rows, so models see the history that led to the branch. Only rows from ``first_own_row`` on are the
+branch's own data: windows and tokens mask every target read from the earlier rows, which already count as the
+parent's samples. A branch takes its root run's family, so a run and its branches share a side of every split.
 """
 
 import glob
@@ -31,9 +36,51 @@ class Sequence:
     name: str
     family: str
     frame: pd.DataFrame  # one row per step, in step order
+    first_own_row: int = 0  # rows before it are a parent's (branch runs): context, not samples
+    parent: str = None
 
     def __len__(self):
         return len(self.frame)
+
+    def own_frame(self):
+        """The rows that are this sequence's own data (all rows unless it is a branch)."""
+        return self.frame.iloc[self.first_own_row:]
+
+
+def attach_parents(sequences):
+    """Give branch sequences (``fork_parent`` / ``fork_step`` columns) their parent's rows as a prefix.
+
+    The prefix is the parent's frame (itself with any prefix) up to the fork step; the branch keeps its own rows
+    after it, marks where they start (``first_own_row``) and takes the parent's family. Raises ValueError when a
+    parent is missing or a fork step is not among the parent's steps.
+    """
+    by_name = {seq.name: seq for seq in sequences}
+    done = set()
+
+    def resolve(seq, chain=()):
+        if seq.name in done or "fork_parent" not in seq.frame or seq.frame["fork_parent"].isna().all():
+            done.add(seq.name)
+            return
+        if seq.name in chain:
+            raise ValueError(f"branch cycle through {seq.name}")
+        parent_name = seq.frame["fork_parent"].dropna().iloc[0]
+        fork_step = int(seq.frame["fork_step"].dropna().iloc[0])
+        if parent_name not in by_name:
+            raise ValueError(f"{seq.name} branches from {parent_name}, which is not in the data")
+        parent = by_name[parent_name]
+        resolve(parent, chain + (seq.name,))
+        steps = parent.frame["step"].to_numpy()
+        if fork_step not in steps:
+            raise ValueError(f"{seq.name} branches after step {fork_step}, which {parent_name} does not have")
+        prefix = parent.frame[steps <= fork_step]
+        own = seq.frame[seq.frame["step"] > fork_step]
+        seq.frame = pd.concat([prefix, own], ignore_index=True)
+        seq.first_own_row, seq.parent, seq.family = len(prefix), parent_name, parent.family
+        done.add(seq.name)
+
+    for seq in sequences:
+        resolve(seq)
+    return sequences
 
 
 def load_v1_directory(directory, exclude=(), family=v1_family):
@@ -76,4 +123,4 @@ def load_gathered_table(path, family=None, exclude=()):
         else:
             fam = (family or v1_family)(name)
         sequences.append(Sequence(name, fam, frame))
-    return sequences
+    return attach_parents(sequences)

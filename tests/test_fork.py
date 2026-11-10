@@ -108,6 +108,14 @@ def test_fork_refuses_a_parent_from_another_code_version(parent_case, fake_serpe
     monkeypatch.setattr(checkpoint, "code_fingerprint", lambda: "a different version")
     with pytest.raises(DeckError, match="different pearlsim source"):
         branch(parent_case, fake_serpent_command, monkeypatch, ["fork_from run 4", *REST_OF_PARENT], name="newer")
+    sim = branch(parent_case, fake_serpent_command, monkeypatch,
+                 ["fork_from run 4 allow_code_change", *REST_OF_PARENT], name="allowed")
+    change = sim.fork["code_change"]
+    assert change["branch_code"] == "a different version" and change["parent_code"] != change["branch_code"]
+    record = json.loads((parent_case / "allowed" / "synthetic_record_5.json").read_text())
+    assert record["provenance"]["fork"]["code_change"] == change
+    with pytest.raises(DeckError, match="takes <dir> <step>"):
+        branch(parent_case, fake_serpent_command, monkeypatch, ["fork_from run 4 please", *REST_OF_PARENT], name="typo")
 
 
 def test_gathered_branch_gets_the_parents_steps_as_context(parent_case, fake_serpent_command, monkeypatch):

@@ -215,11 +215,14 @@ def _apply(simulation, payload):
     np.random.set_state(payload["np_random"])
 
 
-def fork(simulation, parent_dir, step):
+def fork(simulation, parent_dir, step, allow_code_change=False):
     """Start ``simulation`` from the parent run's kept checkpoint after ``step`` (deck keyword fork_from).
 
     The parent's state must come from this pearlsim source and these library versions: a branch continues the
-    parent exactly, which a different code version would not guarantee. Raises ValueError otherwise.
+    parent exactly, which a different code version would not guarantee. Raises ValueError otherwise, unless
+    ``allow_code_change`` (the user's explicit choice, e.g. after a bug fix that cannot affect the branch's steps):
+    the branch then runs the current code and its lineage records both code versions. Library versions must
+    still match.
     """
     parent_dir = os.path.abspath(parent_dir)
     path = os.path.join(parent_dir, archive_name(simulation.simulation_name, step))
@@ -230,8 +233,10 @@ def fork(simulation, parent_dir, step):
         payload = pickle.load(f)
     if payload.get("format") != FORMAT:
         raise ValueError(f"{path}: checkpoint format {payload.get('format')}, expected {FORMAT}")
-    if payload["code"] != code_fingerprint():
-        raise ValueError(f"{path} was written by a different pearlsim source; fork with the parent's code version")
+    code_changed = payload["code"] != code_fingerprint()
+    if code_changed and not allow_code_change:
+        raise ValueError(f"{path} was written by a different pearlsim source; fork with the parent's code version "
+                         "or, if the change cannot affect the branch, add allow_code_change")
     if payload["versions"] != library_versions():
         raise ValueError(f"{path}: library versions {payload['versions']} differ from {library_versions()}")
     if payload["iteration"] != step + 1:
@@ -240,5 +245,7 @@ def fork(simulation, parent_dir, step):
         raise ValueError(f"the parent has no record of step {step} in {parent_dir}")
     _apply(simulation, payload)
     simulation.fork = {"parent": parent_dir, "step": step, "checkpoint_sha256": _sha256(path),
-                       "parent_fork": payload["state"].get("fork")}
+                       "parent_fork": payload["state"].get("fork"),
+                       "code_change": {"parent_code": payload["code"], "branch_code": code_fingerprint()}
+                       if code_changed else None}
     logger.info("forked from %s after step %d", parent_dir, step)

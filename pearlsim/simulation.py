@@ -335,7 +335,8 @@ class Simulation:
             raise ValueError("the checkpoint interval must be at least 1")
 
     def _kw_fork_from(self, args):
-        """fork_from <parent run directory> <step>: start this run from the parent's kept checkpoint after <step>.
+        """fork_from <parent run directory> <step> [allow_code_change]: start this run from the parent's kept
+        checkpoint after <step>. allow_code_change accepts a parent written by another pearlsim version (recorded).
 
         The branch continues exactly as the parent would have; the lines after fork_from set its own controls. It
         replaces the whole simulation state, so it must be the deck's first keyword line. The parent directory is
@@ -344,7 +345,9 @@ class Simulation:
         lines, index = self._deck if self._deck is not None else ([], 0)
         if self._deck is None or any(line.split("#", 1)[0].split() for line in lines[:index]):
             raise DeckError("fork_from must be the first keyword line of a deck read with read_input_file")
-        checkpoint.fork(self, os.path.join("..", args[0]), int(args[1]))
+        if args[2:] not in ([], ["allow_code_change"]):
+            raise DeckError(f"fork_from takes <dir> <step> [allow_code_change], not {' '.join(args)!r}")
+        checkpoint.fork(self, os.path.join("..", args[0]), int(args[1]), allow_code_change=args[2:] != [])
 
     def record_path(self, step):
         """The record of ``step``: this run's own, or for steps up to a fork the parent's."""

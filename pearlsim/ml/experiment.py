@@ -60,7 +60,7 @@ PAPER_SIZES = {
 
 
 # Mappings whose keys are data (mesh names, column patterns, model arguments): an override replaces them
-REPLACED_MAPPINGS = {"meshes", "mape", "params", "sizes"}
+REPLACED_MAPPINGS = {"meshes", "mape", "params", "sizes", "family_overrides"}
 
 
 def merge(defaults, override):
@@ -84,7 +84,10 @@ def load_sequences(cfg):
     if d["source"] == "v1_directory":
         return ml_data.load_v1_directory(d["path"], exclude=d["exclude"])
     if d["source"] == "table":
-        return ml_data.load_gathered_table(d["path"], family=d.get("family"), exclude=d["exclude"])
+        # family_overrides: {sequence: family}, e.g. to hold out branches of training runs (list the family in
+        # split.test_families)
+        return ml_data.load_gathered_table(d["path"], family=d.get("family"), exclude=d["exclude"],
+                                           family_overrides=d.get("family_overrides"))
     raise ValueError(f"unknown data source {d['source']!r}")
 
 

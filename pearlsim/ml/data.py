@@ -9,6 +9,8 @@ Branch runs (``fork_from``, decision 5a): a branch's sequence is its parent's ro
 by its own rows, so models see the history that led to the branch. Only rows from ``first_own_row`` on are the
 branch's own data: windows and tokens mask every target read from the earlier rows, which already count as the
 parent's samples. A branch takes its root run's family, so a run and its branches share a side of every split.
+``family_overrides`` gives named branches a family of their own instead, to hold a branch out for testing while its
+parent trains (decision 12: an unseen control change from a seen state); its prefix rows stay context only.
 """
 
 import glob
@@ -47,18 +49,27 @@ class Sequence:
         return self.frame.iloc[self.first_own_row:]
 
 
-def attach_parents(sequences):
+def attach_parents(sequences, family_overrides=None):
     """Give branch sequences (``fork_parent`` / ``fork_step`` columns) their parent's rows as a prefix.
 
     The prefix is the parent's frame (itself with any prefix) up to the fork step; the branch keeps its own rows
-    after it, marks where they start (``first_own_row``) and takes the parent's family. Raises ValueError when a
-    parent is missing or a fork step is not among the parent's steps.
+    after it, marks where they start (``first_own_row``) and takes the parent's family. ``family_overrides``
+    ({sequence name: family}) sets the family of the named sequences instead; their own branches take the new
+    family. Raises ValueError when a parent is missing, a fork step is not among the parent's steps, or an
+    override names a sequence that is not in the data.
     """
     by_name = {seq.name: seq for seq in sequences}
+    family_overrides = dict(family_overrides or {})
+    unknown = set(family_overrides) - set(by_name)
+    if unknown:
+        raise ValueError(f"family overrides for sequences not in the data: {sorted(unknown)}")
     done = set()
 
     def resolve(seq, chain=()):
-        if seq.name in done or "fork_parent" not in seq.frame or seq.frame["fork_parent"].isna().all():
+        if seq.name in done:
+            return
+        if "fork_parent" not in seq.frame or seq.frame["fork_parent"].isna().all():
+            seq.family = family_overrides.get(seq.name, seq.family)
             done.add(seq.name)
             return
         if seq.name in chain:
@@ -75,7 +86,8 @@ def attach_parents(sequences):
         prefix = parent.frame[steps <= fork_step]
         own = seq.frame[seq.frame["step"] > fork_step]
         seq.frame = pd.concat([prefix, own], ignore_index=True)
-        seq.first_own_row, seq.parent, seq.family = len(prefix), parent_name, parent.family
+        seq.first_own_row, seq.parent = len(prefix), parent_name
+        seq.family = family_overrides.get(seq.name, parent.family)
         done.add(seq.name)
 
     for seq in sequences:
@@ -107,10 +119,11 @@ def load_v1_directory(directory, exclude=(), family=v1_family):
     return sequences
 
 
-def load_gathered_table(path, family=None, exclude=()):
+def load_gathered_table(path, family=None, exclude=(), family_overrides=None):
     """Sequences from a ``pearlsim.gather`` table (Parquet or CSV), one per ``sequence`` value.
 
     family: function of the sequence name (default: v1_family), or the name of a column.
+    family_overrides: {sequence name: family}, see ``attach_parents``.
     """
     table = pd.read_parquet(path) if path.endswith(".parquet") else pd.read_csv(path)
     sequences = []
@@ -123,4 +136,4 @@ def load_gathered_table(path, family=None, exclude=()):
         else:
             fam = (family or v1_family)(name)
         sequences.append(Sequence(name, fam, frame))
-    return attach_parents(sequences)
+    return attach_parents(sequences, family_overrides)

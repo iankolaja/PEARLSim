@@ -12,9 +12,11 @@ Each head predicts a mean and a log-variance (Gaussian NLL); the known measureme
 observables' variance (noise-aware). Observable targets default to the change D_{i+1} - D_i. Rollout feeds the
 predicted means back with the planned controls. Torch is imported lazily so ``import pearlsim.ml`` stays light.
 
-Branch sequences (``Sequence.first_own_row`` f > 0): the parent's rows are context only. Token i's next-observable
-target (row i+1) counts from i = f-1 and its step target (row i) from i = f, in the loss, the scaling and the
-evaluation (``TokenSet.obs_own`` / ``step_own``).
+Branch sequences (``Sequence.first_own_row`` f > 0): the parent's rows are context only. Both targets of token i,
+the next observables (row i+1) and the step quantities (row i), count from i = f, in the loss, the scaling and the
+evaluation (``TokenSet.obs_own`` / ``step_own``). Row f's observables are measured before the branch's first step
+acts (the discharge at its start, from the parent's state after the fork step), so they equal the parent's row f:
+token f-1 -> D_f is the parent's sample, and counting it for the branch too would duplicate it.
 """
 
 from dataclasses import dataclass, field
@@ -40,8 +42,9 @@ class TokenSet:
         return 0 if self.first_own is None else self.first_own[b]
 
     def obs_own(self, b):
-        """Tokens whose next-observable target (row i+1) is this sequence's own."""
-        return np.arange(len(self.x[b])) + 1 >= self.own(b)
+        """Tokens whose next-observable target (row i+1) is this sequence's own: i >= f, since row f's observables,
+        measured before the branch's first step acts, equal the parent's (see the module docstring)."""
+        return np.arange(len(self.x[b])) >= self.own(b)
 
     def step_own(self, b):
         """Tokens whose step target (row i) is this sequence's own."""
@@ -216,7 +219,7 @@ def _chunks(tokens, scaler, length, rng):
     valid = np.zeros((len(tokens.x), length), bool)
     obs_mask, step_mask = np.zeros_like(valid), np.zeros_like(valid)
     for b, xs in enumerate(tokens.x):
-        lowest = min(max(0, tokens.own(b) - length), max(0, len(xs) - length))
+        lowest = min(max(0, tokens.own(b) - length + 1), max(0, len(xs) - length))  # reaches token f
         start = rng.integers(lowest, max(lowest + 1, len(xs) - length + 1))
         part = slice(start, start + length)
         n = len(xs[part])

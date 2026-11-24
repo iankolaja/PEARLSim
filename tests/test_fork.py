@@ -136,13 +136,30 @@ def test_gathered_branch_gets_the_parents_steps_as_context(parent_case, fake_ser
 # ---------------------------------------------------------------- data side, synthetic sequences
 
 
-def family_sequences():
-    """A root run of 10 steps and a branch after its step 6 with 4 own steps (frames as gathered)."""
+def family_sequences(family_overrides=None):
+    """A root run of 10 steps and a branch after its step 6 with 4 own steps (frames as gathered).
+
+    As in real runs, the branch's first own row (step 7) has the parent's observable d: it is measured before the
+    branch's first step acts. Its own k, and every later row, differ (values >= 100).
+    """
     root = pd.DataFrame({"sequence": "root", "step": range(1, 11), "d": np.arange(10.0), "u": 1.0, "k": np.arange(10.0),
                          "fork_parent": None, "fork_step": None})
-    child = pd.DataFrame({"sequence": "child", "step": range(7, 11), "d": 100 + np.arange(4.0), "u": 2.0,
+    child = pd.DataFrame({"sequence": "child", "step": range(7, 11), "d": [6.0, 101.0, 102.0, 103.0], "u": 2.0,
                           "k": 100 + np.arange(4.0), "fork_parent": "root", "fork_step": 6})
-    return attach_parents([Sequence("root", "A", root), Sequence("child", "child", child)])
+    return attach_parents([Sequence("root", "A", root), Sequence("child", "child", child)], family_overrides)
+
+
+def test_family_overrides_hold_out_a_branch():
+    root, child = family_sequences({"child": "held_out"})
+    assert (root.family, child.family, child.first_own_row) == ("A", "held_out", 6)
+    grandchild = pd.DataFrame({"sequence": "grandchild", "step": [9, 10], "d": [8.0, 200.0], "u": 3.0, "k": [200.0, 201.0],
+                               "fork_parent": "child", "fork_step": 8})
+    seqs = attach_parents([Sequence("root", "A", root.frame.iloc[:10]),
+                           Sequence("child", "child", child.own_frame().reset_index(drop=True)),
+                           Sequence("grandchild", "g", grandchild)], {"child": "held_out"})
+    assert [s.family for s in seqs] == ["A", "held_out", "held_out"]  # a held-out branch's branches follow it
+    with pytest.raises(ValueError, match="not in the data"):
+        family_sequences({"nobody": "x"})
 
 
 def test_attach_parents_checks_its_inputs():
@@ -163,9 +180,10 @@ def test_windows_count_each_target_once(horizon):
     alone = make_windows([root], ["d", "u"], specs, window=3, horizon=horizon, control_columns=["u"])
     both = make_windows([root, child], ["d", "u"], specs, window=3, horizon=horizon, control_columns=["u"])
     mine = both.subset(both.sequence == "child")
-    # every unmasked target of the branch is one of its own rows (k >= 100 or d >= 100)
+    # every unmasked target of the branch is its own (k >= 100 or d >= 100): not the first own row's d, which
+    # equals the parent's and is already the parent's sample
     assert (mine.targets[mine.mask] >= 100).all()
-    own_targets = 4 + 4  # k of rows 6..9 and next d of rows 6..9 (the windows at rows 5..8)
+    own_targets = 4 + 3  # k of rows 6..9 (windows at rows 6..9) and next d of rows 7..9 (windows at rows 6..8)
     if horizon == 0:
         assert mine.mask.sum() == own_targets
     assert mine.mask.any(axis=(1, 2)).all()  # no window without an own target
@@ -176,7 +194,7 @@ def test_tokens_mask_the_parents_rows_in_scaling_and_chunks():
     root, child = family_sequences()
     tokens = make_tokens([root, child], ["d"], ["u"], ["k"])
     assert tokens.first_own == [0, 6]
-    assert tokens.obs_own(1).tolist() == [False] * 5 + [True] * 4    # targets d of rows 1..9
+    assert tokens.obs_own(1).tolist() == [False] * 6 + [True] * 3    # targets d of rows 1..9: row 6's is the parent's
     assert tokens.step_own(1).tolist() == [False] * 6 + [True] * 3   # targets k of rows 0..8
     scaler = TokenScaler.fit(tokens)
     unique_z = np.concatenate([root.frame["k"].to_numpy()[:-1], child.frame["k"].to_numpy()[6:-1]])

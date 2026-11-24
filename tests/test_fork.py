@@ -203,3 +203,18 @@ def test_tokens_mask_the_parents_rows_in_scaling_and_chunks():
     for _ in range(20):
         x, y, z, valid, obs_mask, step_mask = _chunks(tokens.subset([1]), scaler, 3, rng)
         assert obs_mask.any() and (obs_mask <= valid).all() and (step_mask <= obs_mask).all()
+
+
+def test_previous_discharge_count_follows_the_lineage(tmp_path):
+    """num_discarded_prev is the previous step's count over the full history: a branch's first own row has its
+    parent's count of the fork step, and the first row of a run 0 (features.OBSERVABLES)."""
+    root = pd.DataFrame({"sequence": "root", "step": range(1, 6), "num_discarded": [0.0, 0.0, 5.0, 6.0, 7.0],
+                         "fork_parent": None, "fork_step": None})
+    child = pd.DataFrame({"sequence": "child", "step": [4, 5], "num_discarded": [60.0, 70.0],
+                          "fork_parent": "root", "fork_step": 3})
+    path = tmp_path / "t.csv"
+    pd.concat([root, child]).to_csv(path, index=False)
+    seqs = {s.name: s for s in load_gathered_table(str(path), family="sequence")}
+    assert seqs["root"].frame["num_discarded_prev"].tolist() == [0.0, 0.0, 0.0, 5.0, 6.0]
+    assert seqs["child"].frame["num_discarded_prev"].tolist() == [0.0, 0.0, 0.0, 5.0, 60.0]
+    assert seqs["child"].first_own_row == 3

@@ -12,23 +12,43 @@ import pandas as pd
 
 V1_CORE_PEBBLES = 250_131  # pebbles in the v1 gFHR model (zone maps of gFHR_benchmark_1975)
 
-# Discharge measurements as used in the paper (dependent inputs)
+# Discharge measurements as used in the paper (dependent inputs). Kept as the paper had them, so the v1 / paper
+# experiments stay reproducible; new work uses OBSERVABLES.
 DEPENDENT_FEATURES = (["R1_avg_FIMA_last_pass", "R2_avg_FIMA_last_pass", "R3_avg_FIMA_last_pass",
                        "R4_avg_FIMA_last_pass"] + [f"burnup_bin{b}_count" for b in range(1, 10)]
                       + ["avg_FIMA", "num_discarded"])
+# The same measurements with num_discarded replaced by num_discarded_prev (add_previous_discharge). A row's
+# discharge measurements describe the pebbles leaving the core at the start of its step, before that step's controls
+# act, except num_discarded: the pebbles removed at the start of step i are those over step i's threshold. As an
+# observable D_i (input of token / window row i, next-step target of row i-1) it therefore leaked step i's control
+# into an input and made the row i-1 target depend on a control that row does not see. With the previous step's
+# count, row i's input holds the last count measured before step i's decision and the next-step target of row i is
+# the count step i's own threshold produces (2026-11-24).
+OBSERVABLES = DEPENDENT_FEATURES[:-1] + ["num_discarded_prev"]
 # v2 alternative to the hard burnup bins: Gaussian-smoothed discharge burnup (records.smoothed_discharge_burnup)
 DEPENDENT_FEATURES_SMOOTH = (DEPENDENT_FEATURES[:4] + [f"burnup_smooth_bin{b}_frac" for b in range(1, 10)]
                              + ["burnup_smooth_p10", "burnup_smooth_p50", "burnup_smooth_p90",
-                                "discharge_fuel_pebbles", "avg_FIMA", "num_discarded"])
+                                "discharge_fuel_pebbles", "avg_FIMA", "num_discarded_prev"])
 CONTROL_FEATURES = ["power", "burnup_step", "graphite_insertion_fraction", "control_rod_position",
                     "fima_discharge_threshold"]
 
 # Paper Table "MAPE applied to each dependent input variable" (fractions); sigma = MAPE / sqrt(2/pi)
-PAPER_NOISE_MAPE = {"burnup_bin*_count": 0.05, "avg_FIMA": 0.025, "num_discarded": 0.05,
+PAPER_NOISE_MAPE = {"burnup_bin*_count": 0.05, "avg_FIMA": 0.025, "num_discarded": 0.05, "num_discarded_prev": 0.05,
                     "R*_avg_FIMA_last_pass": 0.10,
                     # provisional, not from the paper: smoothed fractions as bin counts, quantiles as
                     # avg_FIMA, the discharged fuel count as num_discarded
                     "burnup_smooth_bin*_frac": 0.05, "burnup_smooth_p*": 0.025, "discharge_fuel_pebbles": 0.05}
+
+
+def add_previous_discharge(frame):
+    """Add ``num_discarded_prev``: the previous step's ``num_discarded`` (0 before the first row, a fresh core).
+
+    Call it on a full history: for a branch, after ``attach_parents``, so its first own row gets the parent's count.
+    See OBSERVABLES for why.
+    """
+    if "num_discarded" in frame:
+        frame["num_discarded_prev"] = frame["num_discarded"].shift(1, fill_value=0.0).to_numpy(float)
+    return frame
 
 
 def v1_power_per_fuel_pebble(frame, num_pebbles=V1_CORE_PEBBLES, residence_steps=10):

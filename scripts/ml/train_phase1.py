@@ -4,7 +4,7 @@
 
 Data and splits as in ``pearlsim.ml.experiment`` (v1 directory by default: the development set; family-grouped
 split with the test families held out, validation on one grouped fold). Observables: the paper's discharge
-measurements (``features.DEPENDENT_FEATURES``); controls: ``features.CONTROL_FEATURES``. The variance floor is
+measurements (``features.OBSERVABLES``); controls: ``features.CONTROL_FEATURES``. The variance floor is
 the paper's measurement noise (``features.NoiseModel``), converted to scaled units.
 
 Writes OUT_DIR/results.json (split, config, history, test metrics) and OUT_DIR/model.pt. Test metrics:
@@ -72,7 +72,7 @@ def main(argv=None):
     sequences = experiment.load_sequences(cfg)
     fit_fams, val_fams, test_fams = experiment.split_families(cfg, sequences)
     pick = lambda fams: [s for s in sequences if s.family in fams]  # noqa: E731
-    obs, ctrl = list(features.DEPENDENT_FEATURES), list(features.CONTROL_FEATURES)
+    obs, ctrl = list(features.OBSERVABLES), list(features.CONTROL_FEATURES)
     train_tokens = make_tokens(pick(fit_fams), obs, ctrl)
     val_tokens, test_tokens = make_tokens(pick(val_fams), obs, ctrl), make_tokens(pick(test_fams), obs, ctrl)
 

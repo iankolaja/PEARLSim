@@ -101,7 +101,7 @@ def load_v1_directory(directory, exclude=(), family=v1_family):
     exclude: regular expressions; sequences whose name matches one are skipped
     (e.g. the v1 forecast perturbation runs, which branch off a shared base).
     """
-    from pearlsim.ml.features import v1_power_per_fuel_pebble
+    from pearlsim.ml.features import add_previous_discharge, v1_power_per_fuel_pebble
 
     sequences = []
     for path in sorted(glob.glob(os.path.join(directory, "*_inputs.csv.gz"))):
@@ -115,7 +115,7 @@ def load_v1_directory(directory, exclude=(), family=v1_family):
         frame = pd.concat([inputs.reset_index(drop=True), outputs.reset_index(drop=True)], axis=1)
         frame = frame.rename(columns=V1_RENAME)
         frame["power_per_fuel_pebble"] = v1_power_per_fuel_pebble(frame)
-        sequences.append(Sequence(name, family(name), frame))
+        sequences.append(Sequence(name, family(name), add_previous_discharge(frame)))
     return sequences
 
 
@@ -136,4 +136,9 @@ def load_gathered_table(path, family=None, exclude=(), family_overrides=None):
         else:
             fam = (family or v1_family)(name)
         sequences.append(Sequence(name, fam, frame))
-    return attach_parents(sequences, family_overrides)
+    from pearlsim.ml.features import add_previous_discharge
+
+    sequences = attach_parents(sequences, family_overrides)
+    for seq in sequences:  # on the full history, so a branch's first own row gets its parent's count
+        add_previous_discharge(seq.frame)
+    return sequences
